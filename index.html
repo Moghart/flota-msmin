@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flota MSMIN</title>
+<meta name="theme-color" content="#1f3f95">
+<title>Flota MSMIN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: barra superior con pestañas por rol; conductor ve solo el check, admin ve panel one-page (KPIs > gráficos > tabla) y gestión de vehículos. */
+:root{
+  --bg:#f3f6fb; --surface:#ffffff; --surface-2:#f1f4fa; --line:#d6deeb; --fg:#14213d; --muted:#56627a;
+  --accent:#1f3f95; --accent-fg:#ffffff; --accent-soft:#e3eafa; --heading:#1f3f95;
+  --orange:#e8571e; --orange-soft:#fde9df; --on-sem:#ffffff;
+  --ok:#2f7d4f; --ok-soft:#e1f1e7; --warn:#a86a00; --warn-soft:#fbefd6; --crit:#c0322b; --crit-soft:#fbe3e1; --none:#7d8891; --none-soft:#eceff1;
+  --plate-bg:#ffffff; --plate-fg:#101418; --plate-line:#101418;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0c1630; --surface:#13204a; --surface-2:#1a2a5a; --line:#2a3b70; --fg:#eaf0fb; --muted:#9fb0d0;
+  --accent:#6f95f0; --accent-fg:#0c1630; --accent-soft:#1e3170; --heading:#ffffff;
+  --orange:#ff7a3d; --orange-soft:#47230f; --on-sem:#0c1630;
+  --ok:#5cc187; --ok-soft:#173326; --warn:#e8b04a; --warn-soft:#3a2d12; --crit:#f07068; --crit-soft:#3d1c1a; --none:#8995a0; --none-soft:#252f36;
+  --plate-bg:#e9ecee; --plate-fg:#101418; --plate-line:#101418; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c1630; --surface:#13204a; --surface-2:#1a2a5a; --line:#2a3b70; --fg:#eaf0fb; --muted:#9fb0d0;
+  --accent:#6f95f0; --accent-fg:#0c1630; --accent-soft:#1e3170; --heading:#ffffff;
+  --orange:#ff7a3d; --orange-soft:#47230f; --on-sem:#0c1630;
+  --ok:#5cc187; --ok-soft:#173326; --warn:#e8b04a; --warn-soft:#3a2d12; --crit:#f07068; --crit-soft:#3d1c1a; --none:#8995a0; --none-soft:#252f36;
+  --plate-bg:#e9ecee; --plate-fg:#101418; --plate-line:#101418; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{max-width:1320px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);font-weight:600;margin:0;text-wrap:balance;letter-spacing:.01em}
+h2{font-size:1.35rem;color:var(--heading)} .dash-h h1{color:var(--heading)} h3{font-size:1.05rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.sec-h h3{color:var(--heading);display:flex;align-items:center;gap:8px}
+.sec-h h3::before{content:"";width:4px;height:16px;border-radius:2px;background:var(--orange)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+/* Top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:3px solid var(--orange)}
+.top .wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-block:10px}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand-mark{width:30px;height:30px;border-radius:6px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:15px}
+.logo-msmin{background:#fff;border-radius:6px;padding:4px 8px;display:inline-flex;line-height:0}
+.logo-msmin img{height:30px;width:auto;max-width:none}
+.brand-t{color:var(--muted);font-size:.85rem;font-weight:600;padding-left:10px;border-left:1px solid var(--line)}
+.logo-cli{display:inline-flex;align-items:center;gap:6px;margin-left:4px}
+.logo-cli small{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.logo-cli img{height:30px;width:auto;border-radius:4px}
+@media (max-width:520px){.brand-t{display:none}.logo-msmin img{height:26px}.logo-cli img{height:26px}}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tab{border:0;background:transparent;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;color:var(--muted)}
+.tab:hover{background:var(--surface-2);color:var(--fg)}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-fg)}
+.who{font-size:.85rem;color:var(--muted);display:flex;align-items:center;gap:8px}
+.who img{width:24px;height:24px;border-radius:50%}
+.role{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;padding:2px 7px;border-radius:4px;background:var(--orange-soft);color:var(--orange);font-weight:700}
+
+main{padding-block:20px 60px}
+.view{display:flex;flex-direction:column;gap:18px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.panel-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.muted{color:var(--muted)} .small{font-size:.85rem}
+.btn{border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--crit)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.notice{padding:12px 14px;border-radius:var(--r);background:var(--surface-2);border:1px solid var(--line)}
+.notice.err{background:var(--crit-soft);border-color:transparent;color:var(--crit)}
+.notice.good{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+
+/* Plate */
+.plate{display:inline-flex;align-items:center;gap:0;font-family:var(--f-mono);font-weight:700;font-size:.86rem;letter-spacing:.06em;background:var(--plate-bg);color:var(--plate-fg);border:1.5px solid var(--plate-line);border-radius:4px;padding:1px 7px 1px 5px;white-space:nowrap}
+.plate::before{content:"";width:3px;height:12px;background:#1f4fa3;margin-right:6px;border-radius:1px}
+
+/* Chips */
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:.8rem;font-weight:600;white-space:nowrap}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.c-ok{background:var(--ok-soft);color:var(--ok)} .c-warn{background:var(--warn-soft);color:var(--warn)}
+.c-crit{background:var(--crit-soft);color:var(--crit)} .c-none{background:var(--none-soft);color:var(--none)}
+
+/* Form */
+.grid-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:.85rem;font-weight:600;color:var(--muted)}
+label.f input,label.f select,label.f textarea{font-weight:500;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:9px 10px;font-size:15px}
+textarea{resize:vertical;min-height:80px}
+.sec{border-top:1px solid var(--line);padding-top:14px;margin-top:6px}
+.sec-h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:8px}
+.item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:6px;background:var(--surface-2);border:1px solid transparent}
+.item.need{border-color:var(--warn)}
+.item .lbl{font-weight:600;min-width:0}
+.item .lbl small{display:block;font-weight:500;color:var(--muted);font-size:.75rem}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex-shrink:0}
+.seg button{border:0;background:var(--surface);padding:6px 10px;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--muted);min-width:52px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"].s-ok{background:var(--ok);color:var(--on-sem)}
+.seg button[aria-pressed="true"].s-malo{background:var(--warn);color:var(--on-sem)}
+.seg button[aria-pressed="true"].s-falta{background:var(--crit);color:var(--on-sem)}
+.seg button[aria-pressed="true"].s-na{background:var(--none);color:var(--on-sem)}
+.seg button[aria-pressed="true"].s-yn{background:var(--accent);color:var(--accent-fg)}
+.fat{display:flex;flex-direction:column;gap:8px}
+.item.fq .lbl{font-weight:500;font-size:.92rem}
+.firma{display:block;width:100%;max-width:560px;aspect-ratio:72/22;background:#fff;border:1.5px dashed var(--line);border-radius:6px;touch-action:none;cursor:crosshair}
+.firma.need{border-color:var(--warn)}
+.firma-box{background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px;max-width:380px}
+.firma-box img{display:block;width:100%}
+.form-foot{display:flex;gap:12px;align-items:center;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
+.progress{font-size:.85rem;color:var(--muted);margin-right:auto}
+
+/* Dashboard */
+.dash-h{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.dash-h h1{font-size:2rem;line-height:1}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filters select,.filters input{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px}
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:4px;border-top:3px solid var(--none);cursor:pointer;text-align:left}
+.kpi:hover{border-color:var(--muted)}
+.kpi.k-crit{border-top-color:var(--crit)} .kpi.k-warn{border-top-color:var(--warn)} .kpi.k-ok{border-top-color:var(--ok)} .kpi.k-acc{border-top-color:var(--orange)}
+.kpi .k-l{font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.kpi .k-v{font-family:var(--f-display);font-size:2.4rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.kpi .k-s{font-size:.82rem;color:var(--muted)}
+.kpi .k-s b{color:var(--warn)}
+.row3{display:grid;grid-template-columns:1fr 1.25fr 1.25fr;gap:12px}
+.stack{display:flex;height:22px;border-radius:5px;overflow:hidden;background:var(--surface-2)}
+.stack div{height:100%}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:.85rem}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.big-split{display:flex;gap:18px;margin-top:14px;flex-wrap:wrap}
+.big-split div{display:flex;flex-direction:column}
+.big-split b{font-family:var(--f-display);font-size:1.8rem;line-height:1;font-variant-numeric:tabular-nums}
+.bars{display:flex;flex-direction:column;gap:9px}
+.bar-r{display:grid;grid-template-columns:150px 1fr 34px;gap:10px;align-items:center;font-size:.88rem;cursor:pointer}
+.bar-t{height:14px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.bar-t div{height:100%;background:var(--crit);border-radius:3px}
+.bar-r b{text-align:right;font-variant-numeric:tabular-nums}
+.upcoming{display:flex;flex-direction:column;gap:6px;max-height:230px;overflow:auto}
+.up{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font-size:.88rem;padding:5px 0;border-bottom:1px dashed var(--line)}
+.up:last-child{border-bottom:0}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;text-align:left;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+tbody tr{cursor:pointer}
+tbody tr:hover td{background:var(--surface-2)}
+.cell2{display:flex;flex-direction:column;gap:2px}
+.cell2 small{color:var(--muted);font-size:.75rem}
+.kmbar{width:90px;height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-top:3px}
+.kmbar div{height:100%}
+.seg-f{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg-f button{border:0;background:var(--surface);padding:6px 11px;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--muted)}
+.seg-f button+button{border-left:1px solid var(--line)}
+.seg-f button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.recent{display:flex;flex-direction:column}
+.rc{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:.88rem}
+.rc:last-child{border-bottom:0}
+
+/* Drawer */
+.scrim{position:fixed;inset:0;background:rgba(10,14,18,.45);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);z-index:21;overflow:auto;padding:calc(18px + env(safe-area-inset-top,0px)) calc(18px + env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) 18px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:14px}
+.kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.kv div{background:var(--surface-2);border-radius:6px;padding:9px 10px;display:flex;flex-direction:column;gap:3px}
+.kv small{color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.chk-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px}
+.chk-list div{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.85rem;padding:5px 8px;border-radius:5px;background:var(--surface-2)}
+
+/* Vehicles admin */
+.veh-list{display:flex;flex-direction:column}
+.veh{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.veh:last-child{border-bottom:0}
+.two{display:grid;grid-template-columns:1.1fr .9fr;gap:14px;align-items:start}
+.people{display:flex;flex-direction:column;gap:6px}
+.person{display:flex;align-items:center;gap:8px;font-size:.9rem}
+.person img{width:22px;height:22px;border-radius:50%}
+.hits{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;margin-top:4px}
+.hits button{border:0;background:var(--surface);padding:8px 10px;text-align:left;cursor:pointer;display:flex;gap:8px;align-items:center}
+.hits button:hover{background:var(--surface-2)}
+.login{display:grid;place-items:center;padding-block:40px}
+.login form{width:min(400px,100%);display:flex;flex-direction:column;gap:14px;padding:24px}
+a.btn{text-decoration:none;color:inherit;display:inline-flex;align-items:center}
+.who .btn{padding:4px 9px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:6px;z-index:30;font-weight:600;max-width:calc(100% - 32px)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--fg);font-family:var(--f-display);font-size:1.3rem;margin-bottom:4px}
+
+@media (max-width:1100px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.row3{grid-template-columns:1fr 1fr}.row3>:first-child{grid-column:1/-1}}
+@media (max-width:720px){
+  .top{position:static} body::before{display:none}
+  .top .wrap{gap:8px 12px;padding-block:8px}
+  .who img,.who span:not(.role){display:none}
+  .tab{padding:7px 11px}
+  .item,.item.fq{flex-direction:column;align-items:stretch;gap:8px}
+  .seg{display:flex} .seg button{flex:1;padding:11px 6px;font-size:.9rem}
+  .items{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.row3,.two{grid-template-columns:1fr}.bar-r{grid-template-columns:110px 1fr 30px}.item{flex-wrap:wrap}.dash-h h1{font-size:1.6rem}}
+@media (prefers-reduced-motion:no-preference){.kpi,.btn,.tab{transition:border-color .15s,background .15s}}
+</style>
+</head>
+<body>
+
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><span class="logo-msmin"><img src="data:image/jpeg;base64,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" alt="MSMIN by SGS"></span><span class="brand-t">Flota de camionetas</span><span class="logo-cli" title="Cliente: Codelco"><small>Cliente</small><img src="data:image/jpeg;base64,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tG+x8VXHFPiNib2mjpXSUJjouYI5Zgzkb7MdmMHfrsNz/mpjkMxoHUWg6WBy2p6kDBDAZBHMGva5gB26jzCuxZUL+KJrg4tYBZOxO/8AvNZs2FkM4J3McwOkLqaN2jbeuw/0q/1jp/hZU0vkLOC1BLZyTISa8RnLg53y5fLdTzjR/wAGKv8A6n+ChmoNK8La+CvzY3VhnuMrvdBF7y087+U7Dbl67lTnL5nQGpdE08JldUVIGCKF0gjnDXtc0Dp1HmqsMYDZoyGNLm0OE7dvNXciQ8ePKPmPDH2eJpsDbltyXnvHxRzZCrDN/FSTxsk/olwBV+/iJt3cdoyjTx7n16k1gQz+z6fAG/C3fwHT9FE8ppThTDjbUtPV7pLLInOhaLTerwPhH5fPZdnR/EfTWodLs0/rtkbZPZtjfJM0mKbbs7cdWu9fPqCquFCMaOTHkkaHSDYg7bdhPYruozuypYcuKJzmxE20tIO/aAedV+FRoAB3AAPmOhV7/hpDbFHN35numumaOEySO5ncgZu1u567d1qnTnBWnIbcudjsRt6+w9/LwfTZvxH7qPUdfYvTnEezkdO0gzT08UcEtaOIR7ho/jGt/aB8+4PVRYcA02dksz21dUDfMHfyU2o5D9YxZIMeNwNXbhQ2IPD4lQnWNy5kNU5OzkXvksG1I08/XlAcQGjyAAVu/hluW5sfmsfK98tOCWMxtc7cRuc08zQPI9Cs2Yg4P6ut/uzZy8NKzL1mAse7uefNzSO/qFgzevdIaN01JgtCtZPZeDtLGSWMce8jnn87lYxcduFknKklaW78jZN9yq52W/UcMYUUDg80NxQbVb37eHoqg1RDBW1NlK9YgwR3JWx7duUOOy5q/XOc9znvcXOcSXOPck9yvxcu9wc4kDmuyjaWsDSbpERF8r7REREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREX/9k=" alt="Codelco"></span></div>
+    <nav class="tabs" id="tabs" role="tablist"></nav>
+    <div class="who" id="who"></div>
+  </div>
+</header>
+
+<main class="wrap" id="app">
+  <div class="empty" id="boot"><b>Cargando la flota…</b>Conectando con la base de datos de MSMIN.</div>
+</main>
+<div id="overlay"></div>
+<div id="toastBox"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+(() => {
+"use strict";
+
+// ---------- Definición del check ----------
+// Igual a la hoja "Check list diario". tipo "std": Bueno / Malo / N/A.
+// tipo "req" (equipo obligatorio que el panel controla): Bueno / Malo / Falta.
+const SECCIONES = [
+  { id: "general", nombre: "Equipo general", items: [
+    ["luz_alta","Luces altas","std"],["luz_baja","Luces bajas","std"],["luz_retroceso","Luces de retroceso","std"],
+    ["int_del","Luces intermitentes delanteras","std"],["int_tras","Luces intermitentes traseras","std"],["luz_freno","Luces de freno","std"],
+    ["vidrios","Estado vidrios","std"],["parabrisas","Estado parabrisas","std"],["neum_del","Neumáticos delanteros","std"],
+    ["neum_tras","Neumáticos traseros","std"],["presion","Presión de neumáticos","std"],["neumatico_repuesto","Neumáticos de repuesto (2)","req"],
+    ["cint_del","Cinturones delanteros","std"],["cint_tras","Cinturones traseros","std"],["aire","Aire acondicionado","std"],
+    ["luz_interior","Luces interiores","std"],["espejos","Espejos retrovisores","std"],["freno_servicio","Freno de servicio","std"],
+    ["freno_mano","Freno de mano","std"],["alarma_retroceso","Alarma de retroceso","std"],["limpiaparabrisas","Limpia parabrisas","std"],
+    ["plumillas","Plumillas","std"],["alzavidrios","Alzavidrios","std"]]},
+  { id: "especial", nombre: "Equipamiento especial", items: [
+    ["pertiga","Pértiga","req"],["baliza","Baliza","req"],["focos","Focos faeneros (2)","std"],["trabatuercas","Trabatuercas","std"],
+    ["corta_corriente","Corta corriente","std"],["radio","Radio base comunicación","std"],["cunas","Cuñas (2)","std"],["malla","Malla protección carga","std"]]},
+  { id: "kit", nombre: "Kit de seguridad", items: [
+    ["extintor","Extintor 10 kg ABC","req"],["conos","Triángulos / conos","std"],["botiquin","Botiquín","std"],
+    ["gata","Gata con accesorios","std"],["llave_rueda","Llave de rueda","std"],["chaleco","Chaleco reflectante verde","std"]]},
+  { id: "docs", nombre: "Documentación", items: [
+    ["lic_municipal","Licencia municipal","std"],["lic_interna","Licencia interna","std"],["doc_permiso","Permiso de circulación","std"],
+    ["doc_soap","Seguro obligatorio (SOAP)","std"],["doc_revtec","Revisión técnica vigente","std"],["doc_gases","Certificado de gases","std"]]}
+];
+// Encuesta de fatiga y somnolencia: [id, pregunta, respuesta segura]
+const FATIGA = [
+  ["f1","¿Tengo algún problema que disminuya mi estado de alerta y el conducir de forma segura?","no"],
+  ["f2","¿Estoy tomando algún medicamento que induzca sueño?","no"],
+  ["f3","¿Dormí menos de 6 horas o desperté más de 4 veces antes de comenzar la conducción?","no"],
+  ["f4","¿Existe alguna razón especial para sentir fatiga, cansancio o sueño durante el trabajo (pasó mala noche, enfermedad propia, preocupación especial o participó hasta tarde en una actividad social)?","no"],
+  ["f5","¿Conozco la ruta, velocidades permitidas y las acciones de recuperación que se deben tomar en caso de fatiga y somnolencia?","si"]
+];
+const ALL_ITEMS = SECCIONES.flatMap(s => s.items);
+const ITEM_NAME = Object.fromEntries(ALL_ITEMS.map(i => [i[0], i[1]]));
+const LUCES = ["luz_alta","luz_baja","luz_retroceso","int_del","int_tras","luz_freno","luz_interior"];
+const esFalla = s => s === "malo" || s === "falta";
+const nFallas = r => Object.values(r.items || {}).filter(esFalla).length;
+const ESTADO_TXT = { ok: "Bueno", malo: "Malo", falta: "Falta", na: "N/A" };
+const AVISO_DIAS = 30, AVISO_KM = 1000, CHECK_VIEJO_DIAS = 7, MAX_REG = 60;
+
+// ---------- Estado ----------
+const S = {
+  token: null, user: null, admin: false,
+  flota: {}, flotaReady: false, checks: [], usuarios: [], planilla: "",
+  tab: null, filtro: { faena: "", q: "", estado: "todos", foco: "" },
+  draft: null, drawer: null, editVeh: null, sent: null, editUser: null, cargando: false
+};
+
+// ---------- Conexión con Supabase ----------
+const SUPABASE_URL = "https://atbsumphjckdhygefuld.supabase.co";
+const SUPABASE_KEY = "PEGAR_AQUI_LA_PUBLISHABLE_KEY"; // Supabase > Project Settings > API Keys (anon / publishable). Es pública, no uses la service_role.
+const DOMINIO = "flota-msmin.app";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "msmin.auth" } });
+const normUser = u => String(u || "").trim().toLowerCase().replace(/[.\s-]/g, "");
+const vehDeDb = r => ({ patente: r.patente, interno: r.interno || "", marca: r.marca || "", modelo: r.modelo || "", anio: r.anio, faena: r.faena || "",
+  kmActual: r.km_actual, kmUltimaMant: r.km_ultima_mant, intervaloKm: r.intervalo_km || 10000, venceRevTec: r.vence_rev_tec, venceExtintor: r.vence_extintor });
+const vehADb = v => ({ patente: normPat(v.patente), interno: v.interno || "", marca: v.marca || "", modelo: v.modelo || "", anio: v.anio || null, faena: v.faena || "",
+  km_actual: v.kmActual ?? null, km_ultima_mant: v.kmUltimaMant ?? null, intervalo_km: v.intervaloKm || 10000, vence_rev_tec: v.venceRevTec || null,
+  vence_extintor: v.venceExtintor || null, actualizado: new Date().toISOString() });
+const usuDeDb = u => ({ usuario: u.usuario, nombre: u.nombre, sap: u.sap || "", rol: u.rol, activo: u.activo, ultimo: u.ultimo_ingreso || "" });
+const CHECK_COLS = "id,fecha,patente,usuario_id,conductor,sap,km,km_mant,combustible,items,fatiga,fatiga_alerta,extintor_vence,obs,tiene_firma";
+function checkDeDb(r, usuarios) {
+  return { id: r.id, fecha: r.fecha, patente: r.patente, km: r.km, kmMant: r.km_mant, combustible: r.combustible, conductor: r.conductor, sap: r.sap || "",
+    usuario: (usuarios[r.usuario_id] || {}).usuario || (r.usuario_id === S._uid ? S.user && S.user.usuario : ""), fatigaAlerta: r.fatiga_alerta,
+    extintorVence: r.extintor_vence, obs: r.obs || "", firma: !!r.tiene_firma, items: r.items || {}, fatiga: r.fatiga || {} };
+}
+const fallo = e => { throw new Error((e && e.message) || String(e)); };
+async function miPerfil() {
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) throw new Error("SESION");
+  const { data: p, error } = await sb.from("perfiles").select("*").eq("id", user.id).maybeSingle();
+  if (error) fallo(error);
+  if (!p || !p.activo) { await sb.auth.signOut(); throw new Error("SESION"); }
+  S._uid = user.id;
+  return p;
+}
+async function ensureFlota() { const { data, error } = await sb.from("vehiculos").select("*").order("patente"); if (error) fallo(error); return Object.fromEntries(data.map(r => [r.patente, vehDeDb(r)])); }
+async function listaUsuarios() {
+  const { data, error } = await sb.functions.invoke("admin-usuarios", { body: { accion: "listar" } });
+  if (error) { let m = error.message; try { m = (await error.context.json()).error || m; } catch {} throw new Error(m); }
+  if (data.error) throw new Error(data.error);
+  return data.usuarios.map(usuDeDb);
+}
+const SERVER = {
+  async login(usuario, clave) {
+    const { error } = await sb.auth.signInWithPassword({ email: `${normUser(usuario)}@${DOMINIO}`, password: clave });
+    if (error) throw new Error(/invalid/i.test(error.message) ? "Usuario o clave incorrectos." : /banned/i.test(error.message) ? "Tu usuario está desactivado. Habla con un administrador." : error.message);
+    let p; try { p = await miPerfil(); } catch { throw new Error("Tu usuario no está habilitado. Habla con un administrador."); }
+    sb.rpc("marcar_ingreso").then(() => {}, () => {});
+    return { token: "sb", user: { usuario: p.usuario, nombre: p.nombre, rol: p.rol, admin: p.rol === "admin" } };
+  },
+  async logout() { await sb.auth.signOut(); return true; },
+  async cambiarClave(actual, nueva) {
+    const { error: e1 } = await sb.auth.signInWithPassword({ email: `${S.user.usuario}@${DOMINIO}`, password: actual });
+    if (e1) throw new Error("La clave actual no es correcta.");
+    const { error } = await sb.auth.updateUser({ password: nueva }); if (error) fallo(error); return true;
+  },
+  async getData() {
+    const p = await miPerfil();
+    const admin = p.rol === "admin";
+    const flota = await ensureFlota();
+    let usuarios = [], porId = { [p.id]: p };
+    if (admin) {
+      const { data } = await sb.from("perfiles").select("id,usuario,nombre,sap,rol,activo,ultimo_ingreso").order("nombre");
+      (data || []).forEach(u => porId[u.id] = u); usuarios = (data || []).map(usuDeDb);
+    }
+    let q = sb.from("checks").select(CHECK_COLS).order("fecha", { ascending: false }).limit(admin ? 3000 : 10);
+    const { data: ch, error } = await q; if (error) fallo(error);
+    // La firma no viaja en la lista: tiene_firma solo indica si existe
+    return { user: { usuario: p.usuario, nombre: p.nombre, rol: p.rol, admin }, flota, checks: ch.map(r => checkDeDb(r, porId)), usuarios, planilla: "" };
+  },
+  async guardarCheck(reg, firma) {
+    const fila = { patente: reg.patente, conductor: reg.conductor, sap: reg.sap || "", km: reg.km, km_mant: reg.kmMant, combustible: reg.combustible,
+      items: reg.items, fatiga: reg.fatiga, fatiga_alerta: !!reg.fatigaAlerta, extintor_vence: reg.extintorVence || null, obs: reg.obs || "", firma };
+    const { data, error } = await sb.from("checks").insert(fila).select(CHECK_COLS).single(); if (error) fallo(error);
+    return checkDeDb(data, {});
+  },
+  async getFirma(id) { const { data } = await sb.from("checks").select("firma").eq("id", id).maybeSingle(); return data ? data.firma : null; },
+  async guardarVehiculo(v, esNuevo) {
+    const pat = normPat(v.patente); if (pat.length < 5) throw new Error("Ingresa una patente válida (ej: ABCD12).");
+    if (esNuevo) { const { data } = await sb.from("vehiculos").select("patente").eq("patente", pat).maybeSingle(); if (data) throw new Error("Esa patente ya está en la flota. Usa Editar para cambiarla."); }
+    const { error } = await sb.from("vehiculos").upsert(vehADb(v)); if (error) fallo(error); return ensureFlota();
+  },
+  async importarVehiculos(lista) {
+    const filas = lista.map(vehADb).filter(f => f.patente.length >= 5);
+    const { error } = await sb.from("vehiculos").upsert(filas); if (error) fallo(error);
+    return { ok: filas.length, flota: await ensureFlota() };
+  },
+  async eliminarVehiculo(pat) {
+    const { error } = await sb.from("vehiculos").delete().eq("patente", normPat(pat));
+    if (error) throw new Error(/foreign key/i.test(error.message) ? "Esta camioneta tiene checks registrados; no se puede eliminar." : error.message);
+    return ensureFlota();
+  },
+  async guardarUsuario(u, esNuevo) {
+    const { data, error } = await sb.functions.invoke("admin-usuarios", { body: { accion: esNuevo ? "crear" : "editar", ...u } });
+    if (error) { let m = error.message; try { m = (await error.context.json()).error || m; } catch {} throw new Error(m); }
+    if (data.error) throw new Error(data.error);
+    return data.usuarios.map(usuDeDb);
+  }
+};
+function llamar(fn, ...args) {
+  if (fn !== "login") args = args.slice(1); // el primer argumento era el token de Apps Script
+  return SERVER[fn](...args).catch(e => {
+    const msg = (e && e.message) || String(e);
+    if (/SESION|JWT|expired/i.test(msg)) { cerrarSesion(true); throw new Error("Tu sesión expiró. Vuelve a ingresar."); }
+    throw new Error(msg);
+  });
+}
+const api = (fn, ...args) => llamar(fn, S.token, ...args);
+
+// ---------- Utilidades ----------
+const $ = (s, r = document) => r.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const nf = n => (n == null || isNaN(n)) ? "—" : Number(n).toLocaleString("es-CL");
+const hoy = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
+const parseD = s => { if (!s) return null; const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); return m ? new Date(+m[1], +m[2]-1, +m[3]) : null; };
+const dias = s => { const d = parseD(s); return d ? Math.round((d - hoy()) / 864e5) : null; };
+const fmtD = s => { const d = parseD(s); return d ? d.toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" }) : "Sin fecha"; };
+const fmtDT = iso => { const d = new Date(iso); return isNaN(d) ? "—" : d.toLocaleString("es-CL", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); };
+const normPat = s => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+const showPat = p => { p = normPat(p); return p.length === 6 ? p.slice(0,4) + "-" + p.slice(4) : p; };
+const plate = p => `<span class="plate">${esc(showPat(p))}</span>`;
+const chip = (cls, txt) => `<span class="chip c-${cls}">${esc(txt)}</span>`;
+const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+function toast(msg) {
+  const b = $("#toastBox"); b.innerHTML = `<div class="toast" role="status">${esc(msg)}</div>`;
+  clearTimeout(toast.t); toast.t = setTimeout(() => b.innerHTML = "", 3200);
+}
+
+// ---------- Cálculo de estado por vehículo ----------
+function todosRegistros() { return S.checks.slice(); }
+const misChecks = () => S.checks.filter(r => r.usuario === (S.user && S.user.usuario));
+function estadoVehiculo(v, regsPorPat) {
+  const regs = (regsPorPat[v.patente] || []);
+  const ult = regs[0] || null;
+  const kmChecks = regs.reduce((m, r) => Math.max(m, +r.km || 0), 0);
+  const km = Math.max(+v.kmActual || 0, kmChecks);
+  const res = { v, ult, km, alertas: [] };
+
+  const fechaEst = (d, nombre) => {
+    if (d == null) return { cls: "none", txt: "Sin fecha", n: 0 };
+    if (d < 0) { res.alertas.push(nombre + " vencida"); return { cls: "crit", txt: `Vencida hace ${-d} d`, n: 2 }; }
+    if (d <= AVISO_DIAS) { res.alertas.push(nombre + " por vencer"); return { cls: "warn", txt: `Vence en ${d} d`, n: 1 }; }
+    return { cls: "ok", txt: `${d} d`, n: 0 };
+  };
+  res.rt = fechaEst(dias(v.venceRevTec), "Revisión técnica"); res.rtFecha = v.venceRevTec;
+  const extF = (ult && ult.extintorVence) || v.venceExtintor;
+  res.ext = fechaEst(dias(extF), "Extintor"); res.extFecha = extF;
+
+  const intervalo = +v.intervaloKm || 10000;
+  // Próxima mantención: datos del vehículo; si no hay, el "KM Mant." que anotó el conductor.
+  const proxV = (v.kmUltimaMant == null || v.kmUltimaMant === "") ? null : +v.kmUltimaMant + intervalo;
+  const proxC = ult && +ult.kmMant > 0 ? +ult.kmMant : null;
+  const proxKm = proxV ?? proxC;
+  if (proxKm == null) {
+    res.mant = { cls: "none", txt: "Sin dato", n: 0, rest: null, pct: 0 };
+  } else {
+    const prox = proxKm, rest = prox - km;
+    const pct = Math.max(0, Math.min(1, 1 - rest / intervalo));
+    if (rest < 0) { res.mant = { cls: "crit", txt: `Pasada ${nf(-rest)} km`, n: 2, rest, pct: 1, prox }; res.alertas.push("Mantención vencida"); }
+    else if (rest <= AVISO_KM) { res.mant = { cls: "warn", txt: `Faltan ${nf(rest)} km`, n: 1, rest, pct, prox }; res.alertas.push("Mantención próxima"); }
+    else res.mant = { cls: "ok", txt: `Faltan ${nf(rest)} km`, n: 0, rest, pct, prox };
+  }
+
+  const itemEst = (k, nombre) => {
+    if (!ult) return { cls: "none", txt: "Sin check", n: 0 };
+    const s = ult.items && ult.items[k];
+    if (s === "falta") { res.alertas.push("Sin " + nombre.toLowerCase()); return { cls: "crit", txt: "Falta", n: 2 }; }
+    if (s === "malo") { res.alertas.push(nombre + " en mal estado"); return { cls: "crit", txt: "Malo", n: 2 }; }
+    if (s === "ok") return { cls: "ok", txt: "OK", n: 0 };
+    if (s === "na") return { cls: "none", txt: "N/A", n: 0 };
+    return { cls: "none", txt: "—", n: 0 };
+  };
+  res.baliza = itemEst("baliza", "Baliza");
+  res.pertiga = itemEst("pertiga", "Pértiga");
+  res.repuesto = itemEst("neumatico_repuesto", "Neumático de repuesto");
+  if (!ult) res.luces = { cls: "none", txt: "Sin check", n: 0, malas: [] };
+  else {
+    const malas = LUCES.filter(k => ult.items && ult.items[k] === "malo");
+    if (malas.length) { res.luces = { cls: "crit", txt: `${malas.length} mala${malas.length > 1 ? "s" : ""}`, n: 2, malas }; res.alertas.push("Luces malas"); }
+    else res.luces = { cls: "ok", txt: "OK", n: 0, malas };
+  }
+  const otrosMalos = ult ? Object.entries(ult.items || {}).filter(([k, s]) => esFalla(s) && !LUCES.includes(k) && !["baliza","pertiga","neumatico_repuesto"].includes(k)).map(([k]) => k) : [];
+  res.otros = otrosMalos;
+  const edad = ult ? Math.floor((Date.now() - new Date(ult.fecha)) / 864e5) : null;
+  res.chk = !ult ? { cls: "warn", txt: "Nunca", n: 1 } : edad > CHECK_VIEJO_DIAS ? { cls: "warn", txt: `Hace ${edad} d`, n: 1 } : { cls: "ok", txt: edad === 0 ? "Hoy" : `Hace ${edad} d`, n: 0 };
+  const peor = Math.max(res.rt.n, res.ext.n, res.mant.n, res.baliza.n, res.pertiga.n, res.repuesto.n, res.luces.n, otrosMalos.length ? 1 : 0);
+  res.global = peor === 2 ? "crit" : peor === 1 ? "warn" : "ok";
+  return res;
+}
+function calcularFlota() {
+  const porPat = {};
+  for (const r of todosRegistros()) (porPat[r.patente] ||= []).push(r);
+  for (const k in porPat) porPat[k].sort((a, b) => b.fecha.localeCompare(a.fecha));
+  return { lista: Object.values(S.flota).sort((a, b) => a.patente.localeCompare(b.patente)).map(v => estadoVehiculo(v, porPat)), porPat };
+}
+
+// ---------- Render raíz ----------
+function tabsDisponibles() {
+  return S.admin ? [["panel","Panel de flota"],["check","Check list"],["vehiculos","Vehículos"],["usuarios","Usuarios"]] : [["check","Check list"]];
+}
+function renderTabs() {
+  const t = tabsDisponibles();
+  $("#tabs").innerHTML = t.length > 1 ? t.map(([id, n]) => `<button class="tab" role="tab" data-tab="${id}" aria-selected="${S.tab === id}">${n}</button>`).join("") : "";
+}
+function renderWho() {
+  if (!S.user) { $("#who").innerHTML = ""; return; }
+  $("#who").innerHTML = `<span>${esc(S.user.nombre || S.user.usuario)}</span><span class="role">${S.admin ? "Administrador" : "Conductor"}</span>
+    <button class="btn ghost small" data-act="mi-clave">Clave</button><button class="btn ghost small" data-act="salir">Salir</button>`;
+}
+function render() {
+  renderTabs(); renderWho();
+  const app = $("#app");
+  if (!S.token) { app.innerHTML = renderLogin(); renderOverlay(); const u = $("#l-user"); if (u && !u.value) u.focus(); return; }
+  if (!S.flotaReady) { app.innerHTML = `<div class="empty"><b>Cargando la flota…</b>Leyendo la planilla de MSMIN.</div>`; return; }
+  if (S.tab === "clave") app.innerHTML = renderClave();
+  else if (S.tab === "panel" && S.admin) app.innerHTML = renderPanel();
+  else if (S.tab === "vehiculos" && S.admin) app.innerHTML = renderVehiculos();
+  else if (S.tab === "usuarios" && S.admin) app.innerHTML = renderUsuarios();
+  else { app.innerHTML = renderCheck(); initFirma(); }
+  renderOverlay();
+}
+
+// ---------- Vista conductor: Check list ----------
+function nuevoDraft() {
+  return { patente: lsGet("msmin.patente") || "", km: "", kmMant: "", combustible: "", conductor: lsGet("msmin.conductor") || (S.user && S.user.nombre) || "",
+    sap: lsGet("msmin.sap") || "", items: {}, fatiga: {}, extintorVence: "", obs: "", firma: null };
+}
+const alertaFatiga = f => FATIGA.some(([id, , seguro]) => f && f[id] && f[id] !== seguro);
+function renderCheck() {
+  const d = S.draft ||= nuevoDraft();
+  const vehs = Object.values(S.flota).sort((a, b) => a.patente.localeCompare(b.patente));
+  if (S.sent) {
+    const r = S.sent, malos = Object.entries(r.items).filter(([, s]) => esFalla(s));
+    return `<section class="view"><div class="panel">
+      <div class="notice good">Check enviado. ${plate(r.patente)} quedó registrada con ${nf(r.km)} km el ${esc(fmtDT(r.fecha))}.</div>
+      ${r.fatigaAlerta ? `<div class="notice err" style="margin-top:12px">Tu encuesta de fatiga indica riesgo. Informa a tu supervisor antes de conducir.</div>` : ""}
+      ${malos.length ? `<h3 style="margin:16px 0 8px">Ítems reportados con problema (${malos.length})</h3>
+        <div class="chk-list">${malos.map(([k, s]) => `<div><span>${esc(ITEM_NAME[k])}</span>${chip("crit", ESTADO_TXT[s])}</div>`).join("")}</div>
+        <p class="small muted">Avisa a tu supervisor si alguno de estos ítems impide operar en faena.</p>` : `<p>Todos los ítems quedaron en Bueno o N/A.</p>`}
+      <div class="form-foot"><button class="btn primary" data-act="nuevo-check">Hacer otro check</button></div>
+    </div>${renderMisChecks()}</section>`;
+  }
+  const total = ALL_ITEMS.length + FATIGA.length;
+  const resp = ALL_ITEMS.filter(i => d.items[i[0]]).length + FATIGA.filter(q => d.fatiga[q[0]]).length;
+  const v = S.flota[d.patente];
+  const opts = tipo => tipo === "req" ? [["ok","Bueno"],["malo","Malo"],["falta","Falta"]] : [["ok","Bueno"],["malo","Malo"],["na","N/A"]];
+  return `<section class="view">
+  <div class="panel">
+    <div class="panel-h"><h2>Check list diario</h2><span class="small muted">${esc(new Date().toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }))}</span></div>
+    ${!vehs.length ? `<div class="notice">Todavía no hay vehículos registrados. ${S.admin ? "Agrégalos en la pestaña Vehículos." : "Pide a un administrador que cargue la flota."}</div>` : ""}
+    <form id="checkForm" novalidate>
+      <div class="grid-form">
+        <label class="f">Nombre conductor
+          <input id="f-conductor" type="text" autocomplete="name" placeholder="Nombre y apellido" value="${esc(d.conductor)}" required></label>
+        <label class="f">SAP
+          <input id="f-sap" type="text" inputmode="numeric" placeholder="N° SAP" value="${esc(d.sap)}"></label>
+        <label class="f">N° interno / Patente
+          <select id="f-patente" required>
+            <option value="">Selecciona la camioneta</option>
+            ${vehs.map(x => `<option value="${esc(x.patente)}" ${x.patente === d.patente ? "selected" : ""}>${x.interno ? esc(x.interno) + " · " : ""}${esc(showPat(x.patente))} · ${esc([x.marca, x.modelo].filter(Boolean).join(" "))}</option>`).join("")}
+          </select></label>
+        <label class="f">KM actual
+          <input id="f-km" type="number" inputmode="numeric" min="0" step="1" placeholder="${v && v.kmActual ? "Último: " + nf(v.kmActual) : "Ej: 62451"}" value="${esc(d.km)}" required></label>
+        <label class="f">KM mantención (próxima)
+          <input id="f-kmmant" type="number" inputmode="numeric" min="0" step="1" placeholder="Según adhesivo" value="${esc(d.kmMant)}"></label>
+        <label class="f">Nivel combustible (%)
+          <input id="f-comb" type="number" inputmode="numeric" min="0" max="100" step="5" placeholder="0 a 100" value="${esc(d.combustible)}" required></label>
+      </div>
+      ${SECCIONES.map(sec => `<div class="sec">
+        <div class="sec-h"><h3>${esc(sec.nombre)}</h3><button type="button" class="btn ghost small" data-act="todo-ok" data-sec="${sec.id}">Marcar todo Bueno</button></div>
+        <div class="items">${sec.items.map(([k, n, tipo]) => `<div class="item ${d._try && !d.items[k] ? "need" : ""}">
+          <span class="lbl">${esc(n)}</span>
+          <span class="seg" role="group" aria-label="${esc(n)}">
+            ${opts(tipo).map(([s, t]) => `<button type="button" class="s-${s}" data-item="${k}" data-val="${s}" aria-pressed="${d.items[k] === s}">${t}</button>`).join("")}
+          </span></div>`).join("")}</div>
+        ${sec.id === "kit" ? `<div class="grid-form" style="margin-top:10px"><label class="f">Vencimiento del extintor (etiqueta)<input id="f-ext" type="date" value="${esc(d.extintorVence)}"></label></div>` : ""}
+      </div>`).join("")}
+      <div class="sec">
+        <div class="sec-h"><h3>Encuesta breve de fatiga y somnolencia</h3></div>
+        <div class="fat">${FATIGA.map(([id, q]) => `<div class="item fq ${d._try && !d.fatiga[id] ? "need" : ""}">
+          <span class="lbl">${esc(q)}</span>
+          <span class="seg" role="group" aria-label="${esc(q)}">${[["si","Sí"],["no","No"]].map(([s, t]) =>
+            `<button type="button" class="s-yn" data-fat="${id}" data-val="${s}" aria-pressed="${d.fatiga[id] === s}">${t}</button>`).join("")}</span></div>`).join("")}</div>
+      </div>
+      <div class="sec"><label class="f">Observaciones
+        <textarea id="f-obs" placeholder="Detalle de fallas, golpes, ruidos u otra novedad">${esc(d.obs)}</textarea></label></div>
+      <div class="sec">
+        <div class="sec-h"><h3>Firma conductor</h3><button type="button" class="btn ghost small" data-act="borrar-firma">Borrar firma</button></div>
+        <canvas id="firma" class="firma ${d._try && !d.firma ? "need" : ""}" width="720" height="220" aria-label="Firma con el dedo o el mouse"></canvas>
+        <p class="small muted" style="margin:6px 0 0">Firma con el dedo o con el mouse dentro del recuadro.</p>
+      </div>
+      <div id="formErr"></div>
+      <div class="form-foot">
+        <span class="progress num">${resp} de ${total} respuestas</span>
+        <button class="btn primary" type="submit" ${!vehs.length ? "disabled" : ""}>Enviar check</button>
+      </div>
+    </form>
+  </div>
+  ${renderMisChecks()}
+  </section>`;
+}
+function initFirma() {
+  const c = $("#firma"); if (!c || !S.draft) return;
+  const ctx = c.getContext("2d");
+  ctx.lineWidth = 3.2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111";
+  if (S.draft.firma) { const im = new Image(); im.onload = () => ctx.drawImage(im, 0, 0); im.src = S.draft.firma; }
+  let dibujando = false, last = null;
+  const pos = e => { const b = c.getBoundingClientRect(); return [(e.clientX - b.left) * c.width / b.width, (e.clientY - b.top) * c.height / b.height]; };
+  c.addEventListener("pointerdown", e => { dibujando = true; last = pos(e); c.setPointerCapture(e.pointerId); e.preventDefault(); });
+  c.addEventListener("pointermove", e => { if (!dibujando) return; const p = pos(e); ctx.beginPath(); ctx.moveTo(...last); ctx.lineTo(...p); ctx.stroke(); last = p; });
+  const fin = () => { if (!dibujando) return; dibujando = false; S.draft.firma = firmaPNG(c); c.classList.remove("need"); };
+  c.addEventListener("pointerup", fin); c.addEventListener("pointercancel", fin);
+}
+function firmaPNG(c) {
+  // Se guarda en negro sobre transparente, a media resolución, para que pese poco.
+  const o = document.createElement("canvas"); o.width = c.width / 2; o.height = c.height / 2;
+  const x = o.getContext("2d"); x.drawImage(c, 0, 0, o.width, o.height);
+  x.globalCompositeOperation = "source-in"; x.fillStyle = "#111"; x.fillRect(0, 0, o.width, o.height);
+  return o.toDataURL("image/png");
+}
+function renderMisChecks() {
+  const mine = misChecks(); if (!mine.length) return "";
+  return `<div class="panel"><div class="panel-h"><h2>Mis últimos checks</h2></div><div class="recent">
+    ${mine.slice(0, 8).map(r => { const m = nFallas(r);
+      return `<div class="rc">${plate(r.patente)}<span class="num">${esc(fmtDT(r.fecha))} · ${nf(r.km)} km</span>${m ? chip("crit", m + " con problema") : chip("ok", "Todo bueno")}</div>`; }).join("")}
+  </div></div>`;
+}
+async function enviarCheck() {
+  syncDraft();
+  const d = S.draft;
+  d.conductor = d.conductor.trim(); d.sap = d.sap.trim(); d.obs = d.obs.trim();
+  const faltan = ALL_ITEMS.filter(i => !d.items[i[0]]).length + FATIGA.filter(q => !d.fatiga[q[0]]).length;
+  const errs = [];
+  if (!d.conductor) errs.push("escribe tu nombre");
+  if (!d.patente) errs.push("selecciona la patente");
+  if (!d.km || +d.km <= 0) errs.push("ingresa el KM actual");
+  if (d.combustible === "" || +d.combustible < 0 || +d.combustible > 100) errs.push("indica el nivel de combustible (0 a 100 %)");
+  if (faltan) errs.push(`responde ${faltan} ítem${faltan > 1 ? "s" : ""} pendiente${faltan > 1 ? "s" : ""} (marcados en amarillo)`);
+  if (!d.firma) errs.push("firma el check");
+  const v = S.flota[d.patente];
+  if (!errs.length && v && v.kmActual && +d.km < +v.kmActual) errs.push(`el KM actual es menor al último registrado (${nf(v.kmActual)} km); corrígelo`);
+  if (errs.length) { d._try = true; render(); $("#formErr").innerHTML = `<div class="notice err">Para enviar: ${esc(errs.join(", "))}.</div>`; return; }
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const reg = { id, patente: d.patente, km: Math.round(+d.km), kmMant: d.kmMant ? Math.round(+d.kmMant) : null, combustible: Math.round(+d.combustible),
+    conductor: d.conductor, sap: d.sap, fecha: new Date().toISOString(), items: { ...d.items }, fatiga: { ...d.fatiga },
+    fatigaAlerta: alertaFatiga(d.fatiga), extintorVence: d.extintorVence || null, obs: d.obs || "", firma: true };
+  const btn = $("#checkForm button[type=submit]"); btn.disabled = true; btn.textContent = "Enviando…";
+  try {
+    const guardado = await api("guardarCheck", reg, d.firma);
+    S.checks = [guardado, ...S.checks];
+    if (S.flota[guardado.patente] && guardado.km > (S.flota[guardado.patente].kmActual || 0)) S.flota[guardado.patente].kmActual = guardado.km;
+    reg.fecha = guardado.fecha;
+    lsSet("msmin.patente", d.patente); lsSet("msmin.conductor", d.conductor); lsSet("msmin.sap", d.sap);
+    S.sent = reg; S.draft = null; render(); window.scrollTo(0, 0);
+  } catch (e) {
+    btn.disabled = false; btn.textContent = "Enviar check";
+    const f = $("#formErr"); if (f) f.innerHTML = `<div class="notice err">No se pudo guardar el check: ${esc(e.message)}. Revisa tu conexión e inténtalo de nuevo.</div>`;
+  }
+}
+
+// ---------- Vista admin: Panel ----------
+function renderPanel() {
+  if (!S.flotaReady) return `<div class="empty"><b>Cargando…</b></div>`;
+  const { lista } = calcularFlota();
+  if (!lista.length) return `<section class="view"><div class="panel empty"><b>Aún no hay vehículos en la flota</b>Agrega las camionetas en la pestaña Vehículos (una por una o pegando una lista) y aquí verás su estado.<div style="margin-top:14px"><button class="btn primary" data-tab="vehiculos">Ir a Vehículos</button></div></div></section>`;
+  const faenas = [...new Set(lista.map(r => r.v.faena).filter(Boolean))].sort();
+  const F = S.filtro;
+  const base = lista.filter(r => (!F.faena || r.v.faena === F.faena) && (!F.q || normPat(r.v.patente).includes(normPat(F.q)) || (r.v.modelo || "").toLowerCase().includes(F.q.toLowerCase())));
+  const cnt = (k, n) => base.filter(r => r[k].n === n).length;
+  const k = {
+    rt: [cnt("rt", 2), cnt("rt", 1)], ext: [cnt("ext", 2), cnt("ext", 1)], mant: [cnt("mant", 2), cnt("mant", 1)],
+    bp: base.filter(r => r.baliza.n === 2 || r.pertiga.n === 2).length,
+    luz: base.filter(r => r.luces.n === 2).length, rep: base.filter(r => r.repuesto.n === 2).length,
+    ok: base.filter(r => r.global === "ok").length, warn: base.filter(r => r.global === "warn").length, crit: base.filter(r => r.global === "crit").length,
+    sinChk: base.filter(r => r.chk.n === 1).length,
+    fat: base.filter(r => r.ult && r.ult.fatigaAlerta && Date.now() - new Date(r.ult.fecha) < 7 * 864e5).length
+  };
+  const focos = {
+    rt: r => r.rt.n > 0, ext: r => r.ext.n > 0, mant: r => r.mant.n > 0, bp: r => r.baliza.n === 2 || r.pertiga.n === 2,
+    baliza: r => r.baliza.n === 2, pertiga: r => r.pertiga.n === 2, luces: r => r.luces.n === 2, repuesto: r => r.repuesto.n === 2,
+    lr: r => r.luces.n === 2 || r.repuesto.n === 2, chk: r => r.chk.n === 1,
+    fat: r => r.ult && r.ult.fatigaAlerta && Date.now() - new Date(r.ult.fecha) < 7 * 864e5
+  };
+  let filas = base;
+  if (F.estado !== "todos") filas = filas.filter(r => r.global === F.estado);
+  if (F.foco && focos[F.foco]) filas = filas.filter(focos[F.foco]);
+  const ordenN = { crit: 0, warn: 1, ok: 2 };
+  filas = [...filas].sort((a, b) => ordenN[a.global] - ordenN[b.global] || a.v.patente.localeCompare(b.v.patente));
+
+  const tot = base.length || 1;
+  const kpi = (id, l, v, sub, cls) => `<button class="kpi k-${cls}" data-foco="${id}" aria-pressed="${F.foco === id}"><span class="k-l">${l}</span><span class="k-v">${v}</span><span class="k-s">${sub}</span></button>`;
+  const faltRows = [["baliza","Sin baliza",base.filter(focos.baliza).length],["pertiga","Sin pértiga",base.filter(focos.pertiga).length],
+    ["luces","Luces malas",k.luz],["repuesto","Sin neumático repuesto",k.rep],["ext","Extintor vencido",k.ext[0]],["rt","Rev. técnica vencida",k.rt[0]],["mant","Mantención pasada",k.mant[0]]];
+  const maxF = Math.max(1, ...faltRows.map(x => x[2]));
+  const venc = [];
+  for (const r of base) {
+    const a = dias(r.rtFecha); if (a != null && a <= 60) venc.push({ d: a, p: r.v.patente, t: "Revisión técnica", f: r.rtFecha });
+    const b = dias(r.extFecha); if (b != null && b <= 60) venc.push({ d: b, p: r.v.patente, t: "Extintor", f: r.extFecha });
+    if (r.mant.rest != null && r.mant.rest <= 2000) venc.push({ d: null, km: r.mant.rest, p: r.v.patente, t: "Mantención", f: null });
+  }
+  venc.sort((x, y) => (x.d ?? x.km / 100) - (y.d ?? y.km / 100));
+  const recientes = todosRegistros().sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 8);
+
+  return `<section class="view">
+  <div class="dash-h">
+    <div><h3>Estado de flota · ${esc(new Date().toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" }))}</h3><h1>${base.length} camioneta${base.length !== 1 ? "s" : ""}${F.faena ? " en " + esc(F.faena) : ""}</h1></div>
+    <div class="filters">
+      ${faenas.length ? `<select id="flt-faena" aria-label="Faena"><option value="">Todas las faenas</option>${faenas.map(f => `<option ${f === F.faena ? "selected" : ""}>${esc(f)}</option>`).join("")}</select>` : ""}
+      <input id="flt-q" type="search" placeholder="Buscar patente" value="${esc(F.q)}" aria-label="Buscar patente">
+      <button class="btn" data-act="refrescar">Actualizar</button>
+      <button class="btn" data-act="csv">Exportar Excel</button>
+    </div>
+  </div>
+  <div class="kpis">
+    ${kpi("rt","Revisión técnica", k.rt[0], `vencidas · <b>${k.rt[1]}</b> por vencer (${AVISO_DIAS} d)`, k.rt[0] ? "crit" : k.rt[1] ? "warn" : "ok")}
+    ${kpi("mant","Mantención por km", k.mant[0], `pasadas · <b>${k.mant[1]}</b> a menos de ${nf(AVISO_KM)} km`, k.mant[0] ? "crit" : k.mant[1] ? "warn" : "ok")}
+    ${kpi("ext","Extintores", k.ext[0], `vencidos · <b>${k.ext[1]}</b> por vencer (${AVISO_DIAS} d)`, k.ext[0] ? "crit" : k.ext[1] ? "warn" : "ok")}
+    ${kpi("bp","Baliza o pértiga", k.bp, "camionetas con faltante o falla", k.bp ? "crit" : "ok")}
+    ${kpi("lr","Luces y repuesto", k.luz + k.rep, `${k.luz} con luces malas · ${k.rep} sin repuesto`, k.luz + k.rep ? "crit" : "ok")}
+    ${kpi("fat","Alerta de fatiga", k.fat, "último check con riesgo · 7 días", k.fat ? "crit" : "ok")}
+  </div>
+  <div class="row3">
+    <div class="panel"><div class="panel-h"><h3>Estado general</h3></div>
+      <div class="stack" role="img" aria-label="${k.ok} operativas, ${k.warn} con atención, ${k.crit} críticas">
+        <div style="width:${k.ok / tot * 100}%;background:var(--ok)"></div><div style="width:${k.warn / tot * 100}%;background:var(--warn)"></div><div style="width:${k.crit / tot * 100}%;background:var(--crit)"></div></div>
+      <div class="big-split">
+        <div><b style="color:var(--ok)">${k.ok}</b><span class="small muted">Operativas</span></div>
+        <div><b style="color:var(--warn)">${k.warn}</b><span class="small muted">Atención</span></div>
+        <div><b style="color:var(--crit)">${k.crit}</b><span class="small muted">Críticas</span></div>
+      </div>
+      <button class="btn ghost small" style="margin-top:12px" data-foco="chk">${k.sinChk} sin check en ${CHECK_VIEJO_DIAS} días</button>
+      <p class="small muted" style="margin:10px 0 0">Crítica: algo vencido, faltante o en mal estado. Atención: vence pronto o sin check reciente.</p>
+    </div>
+    <div class="panel"><div class="panel-h"><h3>Faltantes y vencidos</h3><span class="small muted">camionetas</span></div>
+      <div class="bars">${faltRows.map(([id, l, n]) => `<div class="bar-r" data-foco="${id}" role="button" tabindex="0"><span>${l}</span><span class="bar-t"><div style="width:${n / maxF * 100}%"></div></span><b>${n}</b></div>`).join("")}</div>
+    </div>
+    <div class="panel"><div class="panel-h"><h3>Próximos vencimientos</h3><span class="small muted">60 días · 2.000 km</span></div>
+      <div class="upcoming">${venc.length ? venc.slice(0, 14).map(x => `<div class="up">${plate(x.p)}<span>${esc(x.t)}${x.f ? ` <span class="muted small">${esc(fmtD(x.f))}</span>` : ""}</span>${
+        x.d != null ? chip(x.d < 0 ? "crit" : x.d <= AVISO_DIAS ? "warn" : "ok", x.d < 0 ? `hace ${-x.d} d` : `en ${x.d} d`) : chip(x.km < 0 ? "crit" : x.km <= AVISO_KM ? "warn" : "ok", x.km < 0 ? `+${nf(-x.km)} km` : `${nf(x.km)} km`)}</div>`).join("") : `<p class="muted small">Nada vence en los próximos 60 días.</p>`}</div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-h"><h2>Detalle por camioneta</h2>
+      <div class="filters">
+        ${F.foco ? `<button class="btn ghost small" data-foco="">Quitar filtro: ${esc({rt:"Rev. técnica",ext:"Extintores",mant:"Mantención",bp:"Baliza/pértiga",baliza:"Baliza",pertiga:"Pértiga",luces:"Luces",repuesto:"Repuesto",lr:"Luces/repuesto",chk:"Sin check",fat:"Fatiga"}[F.foco])} ✕</button>` : ""}
+        <span class="seg-f" role="group" aria-label="Estado">${[["todos","Todas"],["crit","Críticas"],["warn","Atención"],["ok","Operativas"]].map(([id, n]) => `<button data-estado="${id}" aria-pressed="${F.estado === id}">${n}</button>`).join("")}</span>
+      </div></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Patente</th><th>Vehículo</th><th>Estado</th><th>Rev. técnica</th><th>Mantención</th><th>Extintor</th><th>Baliza</th><th>Pértiga</th><th>Luces</th><th>Repuesto</th><th>Último check</th></tr></thead>
+      <tbody>${filas.length ? filas.map(r => `<tr data-veh="${esc(r.v.patente)}">
+        <td>${plate(r.v.patente)}</td>
+        <td><div class="cell2"><span>${r.v.interno ? esc(r.v.interno) + " · " : ""}${esc([r.v.marca, r.v.modelo].filter(Boolean).join(" ") || "—")}</span><small>${esc(r.v.faena || "")}${r.v.faena ? " · " : ""}<span class="num">${nf(r.km)} km</span></small></div></td>
+        <td>${chip(r.global, { ok: "Operativa", warn: "Atención", crit: "Crítica" }[r.global])}</td>
+        <td><div class="cell2">${chip(r.rt.cls, r.rt.txt)}<small>${r.rtFecha ? esc(fmtD(r.rtFecha)) : ""}</small></div></td>
+        <td><div class="cell2">${chip(r.mant.cls, r.mant.txt)}${r.mant.rest != null ? `<div class="kmbar"><div style="width:${r.mant.pct * 100}%;background:var(--${r.mant.cls})"></div></div><small class="num">próx. ${nf(r.mant.prox)} km</small>` : ""}</div></td>
+        <td><div class="cell2">${chip(r.ext.cls, r.ext.txt)}<small>${r.extFecha ? esc(fmtD(r.extFecha)) : ""}</small></div></td>
+        <td>${chip(r.baliza.cls, r.baliza.txt)}</td><td>${chip(r.pertiga.cls, r.pertiga.txt)}</td>
+        <td>${chip(r.luces.cls, r.luces.txt)}</td><td>${chip(r.repuesto.cls, r.repuesto.txt)}</td>
+        <td><div class="cell2">${chip(r.chk.cls, r.chk.txt)}<small>${r.ult ? esc(r.ult.conductor) : ""}${r.ult && r.ult.fatigaAlerta ? ` · <b style="color:var(--crit)">fatiga</b>` : ""}</small></div></td>
+      </tr>`).join("") : `<tr><td colspan="11" class="muted">Ninguna camioneta coincide con este filtro.</td></tr>`}</tbody>
+    </table></div>
+  </div>
+  <div class="panel"><div class="panel-h"><h2>Checks recientes</h2><span class="small muted">${todosRegistros().length} registros</span></div>
+    ${recientes.length ? `<div class="recent">${recientes.map(r => { const m = nFallas(r);
+      return `<div class="rc">${plate(r.patente)}<span><b>${esc(r.conductor)}</b> <span class="muted num">· ${esc(fmtDT(r.fecha))} · ${nf(r.km)} km</span>${r.obs ? `<br><span class="small muted">${esc(r.obs)}</span>` : ""}</span>${m ? chip("crit", m + " con problema") : chip("ok", "Todo bueno")}</div>`; }).join("")}</div>`
+      : `<p class="muted">Cuando los conductores envíen su check list, aparecerán aquí.</p>`}
+  </div>
+  </section>`;
+}
+function renderOverlay() {
+  const o = $("#overlay");
+  if (!S.drawer || !S.flota[S.drawer]) { o.innerHTML = ""; return; }
+  const { lista, porPat } = calcularFlota();
+  const r = lista.find(x => x.v.patente === S.drawer); if (!r) { o.innerHTML = ""; return; }
+  const hist = (porPat[r.v.patente] || []).slice(0, 10);
+  const u = r.ult;
+  o.innerHTML = `<div class="scrim" data-act="cerrar"></div><aside class="drawer" role="dialog" aria-label="Detalle ${esc(showPat(r.v.patente))}">
+    <div class="panel-h" style="margin:0"><div style="display:flex;gap:10px;align-items:center">${plate(r.v.patente)}<h2>${esc([r.v.marca, r.v.modelo, r.v.anio].filter(Boolean).join(" "))}</h2></div><button class="btn ghost" data-act="cerrar">Cerrar</button></div>
+    <div>${chip(r.global, { ok: "Operativa", warn: "Requiere atención", crit: "Crítica" }[r.global])}</div>
+    ${r.alertas.length ? `<div class="notice err">${r.alertas.map(esc).join(" · ")}</div>` : ""}
+    <div class="kv">
+      <div><small>Kilometraje</small><b class="num">${nf(r.km)} km</b></div>
+      <div><small>Próxima mantención</small><b class="num">${r.mant.prox ? nf(r.mant.prox) + " km" : "Sin dato"}</b></div>
+      <div><small>Revisión técnica</small><b>${esc(fmtD(r.rtFecha))}</b></div>
+      <div><small>Extintor</small><b>${esc(fmtD(r.extFecha))}</b></div>
+    </div>
+    <h3>Último check ${u ? `· ${esc(fmtDT(u.fecha))} · ${esc(u.conductor)}` : ""}</h3>
+    ${u ? `<div class="kv">
+        <div><small>Conductor</small><b>${esc(u.conductor)}${u.sap ? ` <span class="muted small">SAP ${esc(u.sap)}</span>` : ""}</b></div>
+        <div><small>Combustible</small><b class="num">${u.combustible != null ? u.combustible + " %" : "—"}</b></div>
+        <div><small>KM al check</small><b class="num">${nf(u.km)} km</b></div>
+        <div><small>KM mant. anotado</small><b class="num">${u.kmMant ? nf(u.kmMant) + " km" : "—"}</b></div>
+      </div>
+      ${SECCIONES.map(sec => `<h3>${esc(sec.nombre)}</h3><div class="chk-list">${sec.items.map(([k, n]) => { const s = u.items[k]; return `<div><span>${esc(n)}</span>${chip(s === "ok" ? "ok" : esFalla(s) ? "crit" : "none", ESTADO_TXT[s] || "—")}</div>`; }).join("")}</div>`).join("")}
+      ${u.fatiga ? `<h3>Encuesta de fatiga</h3>${u.fatigaAlerta ? `<div class="notice err">El conductor marcó una respuesta de riesgo.</div>` : ""}<div class="recent">${FATIGA.map(([id, q, seguro]) => `<div class="rc" style="grid-template-columns:1fr auto"><span class="small">${esc(q)}</span>${u.fatiga[id] ? chip(u.fatiga[id] === seguro ? "ok" : "crit", u.fatiga[id] === "si" ? "Sí" : "No") : chip("none", "—")}</div>`).join("")}</div>` : ""}
+      ${u.firma ? `<h3>Firma conductor</h3><div class="firma-box"><img id="firmaImg" alt="Firma del conductor"></div>` : ""}
+      ${u.obs ? `<div class="notice"><b>Observaciones:</b> ${esc(u.obs)}</div>` : ""}` : `<p class="muted">Esta camioneta aún no tiene checks.</p>`}
+    ${hist.length > 1 ? `<h3>Historial</h3><div class="recent">${hist.map(h => { const m = nFallas(h);
+      return `<div class="rc"><span class="num">${nf(h.km)} km</span><span>${esc(fmtDT(h.fecha))} · ${esc(h.conductor)}</span>${m ? chip("crit", m + " con falla") : chip("ok", "OK")}</div>`; }).join("")}</div>` : ""}
+    <div><button class="btn" data-act="editar-veh" data-pat="${esc(r.v.patente)}">Editar datos del vehículo</button></div>
+  </aside>`;
+  if (u && u.firma) cargarFirma(u);
+}
+const FIRMAS = {};
+async function cargarFirma(u) {
+  const key = u.id;
+  try { if (!(key in FIRMAS)) FIRMAS[key] = await api("getFirma", u.id); } catch { FIRMAS[key] = null; }
+  const img = $("#firmaImg"); if (img && FIRMAS[key]) img.src = FIRMAS[key];
+}
+function exportarCSV() {
+  const { lista } = calcularFlota();
+  const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const H = ["Patente","N° interno","Marca","Modelo","Faena","Km actual","Estado","Vence revisión técnica","Km próxima mantención","Km restantes","Vence extintor","Baliza","Pértiga","Luces malas","Neumático repuesto","Último check","Conductor","Combustible %","Alerta fatiga","Ítems con problema"];
+  const rows = lista.map(r => [showPat(r.v.patente), r.v.interno, r.v.marca, r.v.modelo, r.v.faena, r.km, { ok: "Operativa", warn: "Atención", crit: "Crítica" }[r.global], r.rtFecha || "", r.mant.prox || "", r.mant.rest ?? "", r.extFecha || "",
+    r.baliza.txt, r.pertiga.txt, (r.luces.malas || []).map(k => ITEM_NAME[k]).join(" / "), r.repuesto.txt, r.ult ? r.ult.fecha.slice(0, 10) : "", r.ult ? r.ult.conductor : "",
+    r.ult && r.ult.combustible != null ? r.ult.combustible : "", r.ult ? (r.ult.fatigaAlerta ? "Sí" : "No") : "",
+    r.ult ? Object.entries(r.ult.items || {}).filter(([, s]) => esFalla(s)).map(([k, s]) => ITEM_NAME[k] + " (" + ESTADO_TXT[s] + ")").join(" / ") : ""]);
+  const csv = "\ufeff" + [H, ...rows].map(r => r.map(q).join(";")).join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `flota-msmin-${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click(); a.remove();
+}
+
+// ---------- Vista admin: Vehículos ----------
+const VCAMPOS = [["patente","Patente","text","ABCD12"],["interno","N° interno","text","Ej: C-15"],["marca","Marca","text","Toyota"],["modelo","Modelo","text","Hilux 4x4"],["anio","Año","number",""],
+  ["faena","Faena / área","text","Ej: Centinela"],["kmActual","Km actual","number",""],["kmUltimaMant","Km última mantención","number",""],
+  ["intervaloKm","Intervalo mantención (km)","number","10000"],["venceRevTec","Vence revisión técnica","date",""],["venceExtintor","Vence extintor","date",""]];
+function renderVehiculos() {
+  const vehs = Object.values(S.flota).sort((a, b) => a.patente.localeCompare(b.patente));
+  const e = S.editVeh ? S.flota[S.editVeh] || {} : {};
+  return `<section class="view"><div class="two">
+  <div class="panel"><div class="panel-h"><h2>Flota registrada</h2><span class="small muted">${vehs.length} camioneta${vehs.length !== 1 ? "s" : ""}</span></div>
+    ${vehs.length ? `<div class="veh-list">${vehs.map(v => `<div class="veh">${plate(v.patente)}<span><b>${v.interno ? esc(v.interno) + " · " : ""}${esc([v.marca, v.modelo].filter(Boolean).join(" ") || "—")}</b><br><span class="small muted">${esc(v.faena || "Sin faena")} · RT ${esc(fmtD(v.venceRevTec))} · Ext. ${esc(fmtD(v.venceExtintor))}</span></span>
+      <span style="display:flex;gap:6px"><button class="btn small" data-act="editar-veh" data-pat="${esc(v.patente)}">Editar</button></span></div>`).join("")}</div>`
+      : `<div class="empty"><b>Sin vehículos</b>Agrega la primera camioneta con el formulario o pega la lista completa abajo.</div>`}
+  </div>
+  <div class="view" style="gap:14px">
+    <div class="panel"><div class="panel-h"><h2>${S.editVeh ? "Editar " + esc(showPat(S.editVeh)) : "Agregar camioneta"}</h2>${S.editVeh ? `<button class="btn ghost small" data-act="nuevo-veh">Nueva</button>` : ""}</div>
+      <form id="vehForm" class="grid-form" novalidate>
+        ${VCAMPOS.map(([k, l, t, ph]) => `<label class="f">${l}<input id="v-${k}" type="${t}" ${t === "number" ? 'inputmode="numeric" min="0"' : ""} placeholder="${esc(ph)}" value="${esc(e[k] ?? (k === "intervaloKm" && !S.editVeh ? "10000" : ""))}" ${k === "patente" && S.editVeh ? "readonly" : ""}></label>`).join("")}
+        <div id="vehErr" style="grid-column:1/-1"></div>
+        <div class="form-foot" style="grid-column:1/-1;margin:0">
+          ${S.editVeh ? `<button type="button" class="btn danger" data-act="borrar-veh" data-pat="${esc(S.editVeh)}">${S.confirmDel === S.editVeh ? "Confirmar: eliminar" : "Eliminar"}</button>` : ""}
+          <button class="btn primary" type="submit">${S.editVeh ? "Guardar cambios" : "Agregar a la flota"}</button></div>
+      </form>
+      <p class="small muted" style="margin:10px 0 0">Al registrar una mantención, actualiza "Km última mantención" con el kilometraje en que se hizo.</p>
+    </div>
+    <div class="panel"><div class="panel-h"><h2>Carga masiva</h2></div>
+      <p class="small muted" style="margin-top:0">Pega una fila por camioneta, separada por punto y coma o tabulación (puedes copiar desde Excel):<br><code>patente; marca; modelo; faena; km actual; km última mantención; vence rev. técnica (AAAA-MM-DD); vence extintor (AAAA-MM-DD); n° interno</code></p>
+      <label class="f">Lista<textarea id="bulk" rows="5" placeholder="ABCD12; Toyota; Hilux; Centinela; 84250; 80000; 2027-03-31; 2027-01-15"></textarea></label>
+      <div id="bulkMsg"></div>
+      <div class="form-foot"><button class="btn" data-act="bulk">Importar</button></div>
+    </div>
+  </div></div></section>`;
+}
+async function guardarVeh() {
+  const g = k => $("#v-" + k).value.trim();
+  const pat = normPat(g("patente"));
+  const err = m => $("#vehErr").innerHTML = `<div class="notice err">${esc(m)}</div>`;
+  if (pat.length < 5) return err("Ingresa una patente válida (ej: ABCD12).");
+  if (!S.editVeh && S.flota[pat]) return err("Esa patente ya está en la flota. Usa Editar para cambiarla.");
+  const num = k => g(k) === "" ? null : Math.round(+g(k));
+  const doc = { patente: pat, interno: g("interno"), marca: g("marca"), modelo: g("modelo"), anio: num("anio"), faena: g("faena"), kmActual: num("kmActual"),
+    kmUltimaMant: num("kmUltimaMant"), intervaloKm: num("intervaloKm") || 10000, venceRevTec: g("venceRevTec") || null, venceExtintor: g("venceExtintor") || null };
+  const btn = $("#vehForm button[type=submit]"); btn.disabled = true;
+  try { S.flota = await api("guardarVehiculo", doc, !S.editVeh); toast(S.editVeh ? "Cambios guardados" : `${showPat(pat)} agregada a la flota`); S.editVeh = null; render(); }
+  catch (e) { btn.disabled = false; err(`No se pudo guardar: ${e.message}`); }
+}
+async function importar() {
+  const raw = $("#bulk").value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const msg = $("#bulkMsg"); let ok = 0; const bad = [], lista = [];
+  const fecha = s => { s = (s || "").trim(); if (!s) return null; let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s); if (m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+    m = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/.exec(s); return m ? `${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}` : null; };
+  const n = s => { s = String(s || "").replace(/\./g, "").trim(); return s === "" || isNaN(+s) ? null : Math.round(+s); };
+  for (const line of raw) {
+    const c = line.split(/;|\t/).map(x => x.trim());
+    const pat = normPat(c[0]);
+    if (pat.length < 5 || /^PATENTE/.test(pat)) { if (!/^PATENTE/.test(pat)) bad.push(line); continue; }
+    const prev = S.flota[pat] || {};
+    const doc = { ...prev, patente: pat, marca: c[1] || prev.marca || "", modelo: c[2] || prev.modelo || "", faena: c[3] || prev.faena || "",
+      kmActual: n(c[4]) ?? prev.kmActual ?? null, kmUltimaMant: n(c[5]) ?? prev.kmUltimaMant ?? null, intervaloKm: prev.intervaloKm || 10000,
+      venceRevTec: fecha(c[6]) || prev.venceRevTec || null, venceExtintor: fecha(c[7]) || prev.venceExtintor || null, interno: c[8] || prev.interno || "", anio: prev.anio ?? null };
+    lista.push(doc);
+  }
+  if (lista.length) {
+    msg.innerHTML = `<div class="notice">Importando ${lista.length} camioneta(s)…</div>`;
+    try { const r = await api("importarVehiculos", lista); ok = r.ok; S.flota = r.flota; } catch (e) { msg.innerHTML = `<div class="notice err">${esc(e.message)}</div>`; return; }
+  }
+  msg.innerHTML = `<div class="notice ${bad.length ? "err" : "good"}">${ok} camioneta${ok !== 1 ? "s" : ""} importada${ok !== 1 ? "s" : ""}.${bad.length ? ` No se pudieron leer ${bad.length} fila(s): ${esc(bad.slice(0, 3).join(" | "))}` : ""}</div>`;
+  const txt = $("#bulk").value; render(); const b2 = $("#bulk"); if (b2) b2.value = (ok && !bad.length) ? "" : txt;
+  const m2 = $("#bulkMsg"); if (m2) m2.innerHTML = `<div class="notice ${bad.length ? "err" : "good"}">${ok} camioneta${ok !== 1 ? "s" : ""} importada${ok !== 1 ? "s" : ""}.${bad.length ? ` No se pudieron leer ${bad.length} fila(s): ${esc(bad.slice(0, 3).join(" | "))}` : ""}</div>`;
+}
+// ---------- Login, clave y usuarios ----------
+function renderLogin() {
+  return `<section class="login"><form id="loginForm" class="panel" novalidate>
+    <h2>Ingresar</h2>
+    <p class="small muted" style="margin:0">Check list diario de camionetas MSMIN.</p>
+    <label class="f">Usuario<input id="l-user" autocomplete="username" autocapitalize="none" placeholder="Usuario o RUT sin puntos"></label>
+    <label class="f">Clave<input id="l-pass" type="password" autocomplete="current-password"></label>
+    <div id="loginErr"></div>
+    <button class="btn primary" type="submit">Ingresar</button>
+    <p class="small muted" style="margin:0">¿Olvidaste tu clave? Pídele a un administrador que te asigne una nueva.</p>
+  </form></section>`;
+}
+async function ingresar() {
+  const u = $("#l-user").value.trim(), p = $("#l-pass").value;
+  const err = $("#loginErr"), btn = $("#loginForm button[type=submit]");
+  if (!u || !p) { err.innerHTML = `<div class="notice err">Escribe tu usuario y tu clave.</div>`; return; }
+  btn.disabled = true; btn.textContent = "Ingresando…";
+  try {
+    const r = await llamar("login", u, p);
+    S.token = r.token; S.user = r.user; S.admin = !!r.user.admin; lsSet("msmin.token", r.token);
+    elegirTab(); render(); await cargar();
+  } catch (e) { btn.disabled = false; btn.textContent = "Ingresar"; err.innerHTML = `<div class="notice err">${esc(e.message)}</div>`; }
+}
+function cerrarSesion(expirada) {
+  if (S.token && !expirada) llamar("logout", S.token).catch(() => {});
+  S.token = null; S.user = null; S.admin = false; S.checks = []; S.flota = {}; S.flotaReady = false; S.usuarios = []; S.draft = null; S.sent = null;
+  try { localStorage.removeItem("msmin.token"); } catch {}
+  render(); if (expirada) toast("Tu sesión expiró. Vuelve a ingresar.");
+}
+function renderClave() {
+  return `<section class="view"><form id="claveForm" class="panel" style="max-width:460px" novalidate>
+    <div class="panel-h"><h2>Cambiar mi clave</h2></div>
+    <div class="grid-form" style="grid-template-columns:1fr">
+      <label class="f">Clave actual<input id="c-actual" type="password" autocomplete="current-password"></label>
+      <label class="f">Nueva clave<input id="c-nueva" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></label>
+      <label class="f">Repite la nueva clave<input id="c-nueva2" type="password" autocomplete="new-password"></label>
+    </div>
+    <div id="claveErr" style="margin-top:12px"></div>
+    <div class="form-foot"><button type="button" class="btn ghost" data-act="volver">Volver</button><button class="btn primary" type="submit">Guardar clave</button></div>
+  </form></section>`;
+}
+async function guardarClave() {
+  const a = $("#c-actual").value, n = $("#c-nueva").value, n2 = $("#c-nueva2").value, err = $("#claveErr");
+  if (n.length < 6) { err.innerHTML = `<div class="notice err">La nueva clave debe tener al menos 6 caracteres.</div>`; return; }
+  if (n !== n2) { err.innerHTML = `<div class="notice err">Las claves nuevas no coinciden.</div>`; return; }
+  try { await api("cambiarClave", a, n); toast("Clave actualizada"); elegirTab(true); render(); }
+  catch (e) { err.innerHTML = `<div class="notice err">${esc(e.message)}</div>`; }
+}
+function renderUsuarios() {
+  const e = S.editUser ? S.usuarios.find(u => u.usuario === S.editUser) || {} : {};
+  const lista = [...S.usuarios].sort((a, b) => (a.rol === b.rol ? 0 : a.rol === "admin" ? -1 : 1) || a.nombre.localeCompare(b.nombre));
+  return `<section class="view"><div class="two">
+  <div class="panel"><div class="panel-h"><h2>Usuarios</h2><span class="small muted">${S.usuarios.filter(u => u.activo).length} activos</span></div>
+    <div class="veh-list">${lista.map(u => `<div class="veh"><span class="chip c-${u.activo ? (u.rol === "admin" ? "warn" : "ok") : "none"}">${u.rol === "admin" ? "Admin" : "Conductor"}</span>
+      <span><b>${esc(u.nombre)}</b>${u.activo ? "" : ` <span class="small muted">(desactivado)</span>`}<br><span class="small muted">${esc(u.usuario)} · ${u.ultimo ? "último ingreso " + esc(fmtDT(u.ultimo)) : "nunca ha ingresado"}</span></span>
+      <button class="btn small" data-act="editar-user" data-u="${esc(u.usuario)}">Editar</button></div>`).join("")}</div>
+  </div>
+  <div class="panel"><div class="panel-h"><h2>${S.editUser ? "Editar " + esc(e.nombre || S.editUser) : "Crear usuario"}</h2>${S.editUser ? `<button class="btn ghost small" data-act="nuevo-user">Nuevo</button>` : ""}</div>
+    <form id="userForm" class="grid-form" style="grid-template-columns:1fr" novalidate>
+      <label class="f">Nombre y apellido<input id="u-nombre" value="${esc(e.nombre || "")}" placeholder="Ej: Pedro Tabilo"></label>
+      <label class="f">Usuario<input id="u-usuario" value="${esc(e.usuario || "")}" autocapitalize="none" placeholder="Ej: RUT sin puntos ni guion, 12345678k" ${S.editUser ? "readonly" : ""}></label>
+      <label class="f">SAP<input id="u-sap" value="${esc(e.sap || "")}" inputmode="numeric" placeholder="Opcional"></label>
+      <label class="f">Rol<select id="u-rol"><option value="conductor" ${e.rol !== "admin" ? "selected" : ""}>Conductor: solo hace el check list</option><option value="admin" ${e.rol === "admin" ? "selected" : ""}>Administrador: ve el panel y gestiona todo</option></select></label>
+      <label class="f">${S.editUser ? "Nueva clave (déjala vacía para no cambiarla)" : "Clave inicial"}<input id="u-clave" type="text" autocomplete="off" placeholder="Mínimo 6 caracteres"></label>
+      ${S.editUser ? `<label class="f" style="flex-direction:row;align-items:center;gap:8px"><input id="u-activo" type="checkbox" ${e.activo ? "checked" : ""}> Usuario activo (desmárcalo para bloquear el acceso)</label>` : ""}
+      <div id="userErr"></div>
+      <div class="form-foot" style="margin:0"><button class="btn primary" type="submit">${S.editUser ? "Guardar cambios" : "Crear usuario"}</button></div>
+    </form>
+    <p class="small muted" style="margin:10px 0 0">Entrégale a la persona su usuario, su clave inicial y el enlace de la app. Después puede cambiar su clave desde el botón Clave.</p>
+  </div></div></section>`;
+}
+async function guardarUser() {
+  const u = { nombre: $("#u-nombre").value.trim(), usuario: $("#u-usuario").value.trim(), rol: $("#u-rol").value, sap: $("#u-sap").value.trim(), clave: $("#u-clave").value.trim(),
+    activo: $("#u-activo") ? $("#u-activo").checked : true };
+  const btn = $("#userForm button[type=submit]"); btn.disabled = true;
+  try { S.usuarios = await api("guardarUsuario", u, !S.editUser); toast(S.editUser ? "Usuario actualizado" : `Usuario ${u.usuario} creado`); S.editUser = null; render(); }
+  catch (e) { btn.disabled = false; $("#userErr").innerHTML = `<div class="notice err">${esc(e.message)}</div>`; }
+}
+async function cargar(silencioso) {
+  if (!S.token || S.cargando) return;
+  S.cargando = true;
+  try {
+    const d = await api("getData");
+    S.user = d.user; S.admin = !!d.user.admin; S.flota = d.flota || {}; S.checks = d.checks || []; S.usuarios = d.usuarios || []; S.planilla = d.planilla || "";
+    S.flotaReady = true; elegirTab(); softRender();
+  } catch (e) { if (S.token && !silencioso) toast("No se pudo leer la planilla: " + e.message); }
+  finally { S.cargando = false; }
+}
+
+// ---------- Eventos ----------
+document.addEventListener("click", async ev => {
+  const t = ev.target.closest("[data-tab],[data-item],[data-fat],[data-act],[data-foco],[data-estado],[data-veh]");
+  if (!t) return;
+  if (t.dataset.tab) { S.tab = t.dataset.tab; lsSet("msmin.tab", S.tab); S.editUser = null; S.drawer = null; render(); window.scrollTo(0, 0); return; }
+  if (t.dataset.item) {
+    syncDraft(); S.draft.items[t.dataset.item] = t.dataset.val;
+    t.parentElement.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b === t));
+    t.closest(".item").classList.remove("need");
+    actualizarProgreso(); return;
+  }
+  if (t.dataset.fat) {
+    syncDraft(); S.draft.fatiga[t.dataset.fat] = t.dataset.val;
+    t.parentElement.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b === t));
+    t.closest(".item").classList.remove("need"); actualizarProgreso(); return;
+  }
+  if (t.dataset.foco !== undefined && !t.dataset.act) { S.filtro.foco = S.filtro.foco === t.dataset.foco ? "" : t.dataset.foco; render(); return; }
+  if (t.dataset.estado) { S.filtro.estado = t.dataset.estado; render(); return; }
+  if (t.dataset.veh && !t.dataset.act) { S.drawer = t.dataset.veh; renderOverlay(); return; }
+  const a = t.dataset.act;
+  if (a === "todo-ok") { syncDraft(); const sec = SECCIONES.find(s => s.id === t.dataset.sec); sec.items.forEach(([k]) => S.draft.items[k] = "ok"); render(); }
+  else if (a === "borrar-firma") { if (S.draft) S.draft.firma = null; const c = $("#firma"); if (c) c.getContext("2d").clearRect(0, 0, c.width, c.height); }
+  else if (a === "nuevo-check") { S.sent = null; S.draft = nuevoDraft(); render(); }
+  else if (a === "cerrar") { S.drawer = null; renderOverlay(); }
+  else if (a === "refrescar") { await cargar(); toast("Datos actualizados"); }
+  else if (a === "salir") cerrarSesion();
+  else if (a === "csv") exportarCSV();
+  else if (a === "mi-clave") { S.tab = "clave"; render(); }
+  else if (a === "volver") { elegirTab(true); render(); }
+  else if (a === "editar-user") { S.editUser = t.dataset.u; render(); window.scrollTo(0, 0); }
+  else if (a === "nuevo-user") { S.editUser = null; render(); }
+  else if (a === "editar-veh") { S.editVeh = t.dataset.pat; S.drawer = null; S.confirmDel = null; S.tab = "vehiculos"; render(); window.scrollTo(0, 0); }
+  else if (a === "nuevo-veh") { S.editVeh = null; render(); }
+  else if (a === "borrar-veh") {
+    if (S.confirmDel !== t.dataset.pat) { S.confirmDel = t.dataset.pat; render(); return; }
+    try { S.flota = await api("eliminarVehiculo", t.dataset.pat); toast(`${showPat(t.dataset.pat)} eliminada`); S.editVeh = null; S.confirmDel = null; render(); } catch (e) { toast("No se pudo eliminar: " + e.message); }
+  }
+  else if (a === "bulk") importar();
+});
+document.addEventListener("keydown", ev => {
+  if (ev.key === "Escape" && S.drawer) { S.drawer = null; renderOverlay(); }
+  if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches(".bar-r")) { ev.preventDefault(); ev.target.click(); }
+});
+document.addEventListener("submit", ev => {
+  ev.preventDefault();
+  if (ev.target.id === "checkForm") enviarCheck();
+  if (ev.target.id === "vehForm") guardarVeh();
+  if (ev.target.id === "loginForm") ingresar();
+  if (ev.target.id === "claveForm") guardarClave();
+  if (ev.target.id === "userForm") guardarUser();
+});
+document.addEventListener("input", async ev => {
+  const id = ev.target.id;
+  if (id === "flt-q") { S.filtro.q = ev.target.value; clearTimeout(S._qt); S._qt = setTimeout(() => { render(); const i = $("#flt-q"); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); }
+});
+document.addEventListener("change", ev => {
+  if (ev.target.id === "flt-faena") { S.filtro.faena = ev.target.value; render(); }
+  if (ev.target.id === "f-patente") { syncDraft(); render(); }
+});
+function actualizarProgreso() {
+  const d = S.draft, p = $(".progress"); if (!d || !p) return;
+  const resp = ALL_ITEMS.filter(i => d.items[i[0]]).length + FATIGA.filter(q => d.fatiga[q[0]]).length;
+  p.textContent = `${resp} de ${ALL_ITEMS.length + FATIGA.length} respuestas`;
+}
+function syncDraft() {
+  if (!S.draft || !$("#checkForm")) return;
+  S.draft.patente = $("#f-patente").value; S.draft.km = $("#f-km").value; S.draft.conductor = $("#f-conductor").value;
+  S.draft.sap = $("#f-sap").value; S.draft.kmMant = $("#f-kmmant").value; S.draft.combustible = $("#f-comb").value;
+  S.draft.extintorVence = $("#f-ext").value; S.draft.obs = $("#f-obs").value;
+}
+
+// ---------- Arranque ----------
+function elegirTab(forzar) {
+  const tabs = tabsDisponibles().map(t => t[0]);
+  if (forzar || !tabs.includes(S.tab)) {
+    const pref = lsGet("msmin.tab");
+    S.tab = tabs.includes(pref) ? pref : tabs[0];
+  }
+}
+function softRender() {
+  // Evita borrar lo que el conductor está escribiendo
+  if (S.tab === "check" && $("#checkForm")) { syncDraft(); }
+  const f = document.activeElement && document.activeElement.id;
+  render();
+  if (f && f !== "flt-q") { const el = document.getElementById(f); if (el && el.focus) el.focus(); }
+}
+function start() {
+  S.token = lsGet("msmin.auth") ? "sb" : null;
+  if (S.token) { S.flotaReady = false; render(); cargar(); } else render();
+  // El panel se refresca solo cada 2 minutos para ver los checks nuevos
+  setInterval(() => { if (S.admin && S.tab === "panel" && !S.drawer && document.visibilityState === "visible") cargar(true); }, 120000);
+}
+start();
+})();
+</script>
+
+</body>
+</html>
