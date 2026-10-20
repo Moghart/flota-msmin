@@ -1,5 +1,6 @@
 // Supabase Edge Function: admin-usuarios
 // Crea y edita usuarios de la app Flota MSMIN. Solo la pueden usar administradores activos.
+// La función valida la sesión de quien llama (por eso verify_jwt está desactivado).
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const DOMINIO = "flota-msmin.app"; // los usuarios entran con "usuario"; internamente es usuario@flota-msmin.app
@@ -12,14 +13,25 @@ const resp = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const normUser = (u: unknown) => String(u ?? "").trim().toLowerCase().replace(/[.\s-]/g, "");
 
+function claveServicio(): string {
+  const legacy = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (legacy) return legacy;
+  const raw = Deno.env.get("SUPABASE_SECRET_KEYS");
+  if (raw) {
+    try { const o = JSON.parse(raw); const v = Object.values(o)[0]; if (typeof v === "string") return v; } catch { return raw; }
+  }
+  throw new Error("Falta la clave de servicio del proyecto.");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
     const url = Deno.env.get("SUPABASE_URL")!;
-    const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    const admin = createClient(url, claveServicio(), { auth: { persistSession: false, autoRefreshToken: false } });
 
     // Quién llama
-    const jwt = (req.headers.get("Authorization") ?? "").replace("Bearer ", "");
+    const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    if (!jwt) return resp({ error: "Tu sesión expiró. Vuelve a ingresar." }, 401);
     const { data: quien, error: eQuien } = await admin.auth.getUser(jwt);
     if (eQuien || !quien?.user) return resp({ error: "Tu sesión expiró. Vuelve a ingresar." }, 401);
     const { data: yo } = await admin.from("perfiles").select("id,rol,activo").eq("id", quien.user.id).maybeSingle();

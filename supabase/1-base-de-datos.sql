@@ -107,3 +107,6 @@ grant select, insert, update, delete on public.vehiculos to authenticated;
 grant select, insert on public.checks to authenticated;
 grant execute on function public.es_admin(), public.es_activo(), public.marcar_ingreso() to authenticated;
 revoke all on public.perfiles, public.vehiculos, public.checks from anon;
+revoke execute on function public.es_admin(), public.es_activo(), public.marcar_ingreso(), public.check_actualiza_km() from anon, public;
+revoke execute on function public.check_actualiza_km() from authenticated;
+grant execute on function public.es_admin(), public.es_activo(), public.marcar_ingreso() to authenticated;
