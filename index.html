@@ -781,17 +781,149 @@ async function cargarFirma(u) {
   try { if (!(key in FIRMAS)) FIRMAS[key] = await api("getFirma", u.id); } catch { FIRMAS[key] = null; }
   const img = $("#firmaImg"); if (img && FIRMAS[key]) img.src = FIRMAS[key];
 }
-function exportarCSV() {
+// Excel con formato: se carga ExcelJS solo cuando se exporta.
+let excelLib = null;
+function cargarExcelJS() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  return excelLib ||= new Promise((ok, err) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js";
+    s.onload = () => ok(window.ExcelJS); s.onerror = () => { excelLib = null; err(new Error("No se pudo cargar ExcelJS")); };
+    document.head.appendChild(s);
+  });
+}
+const XL = {
+  azul: "FF1F3F95", azulOsc: "FF14296A", naranjo: "FFE8571E", blanco: "FFFFFFFF", gris: "FF6B7280", linea: "FFD9DEE8", banda: "FFF4F6FB",
+  est: { ok: ["FFE3F4E8", "FF1E7B3A"], warn: ["FFFFF1D6", "FF9A5B00"], crit: ["FFFDE2E0", "FFB42318"], none: [null, "FF6B7280"] }
+};
+const xlFecha = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ""); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null; };
+const xlFechaHora = iso => { const d = new Date(iso); return isNaN(d) ? null : new Date(d.getTime() - d.getTimezoneOffset() * 6e4); };
+function xlLogos(wb, ws, ultimaCol) {
+  const poner = (sel, col) => {
+    const img = document.querySelector(sel); if (!img || !img.src.startsWith("data:image/")) return;
+    const ext = /^data:image\/(png|jpe?g|gif)/.exec(img.src); if (!ext) return;
+    const id = wb.addImage({ base64: img.src, extension: ext[1] === "jpg" ? "jpeg" : ext[1] });
+    const h = 46, w = img.naturalHeight ? Math.round(h * img.naturalWidth / img.naturalHeight) : 120;
+    ws.addImage(id, { tl: { col, row: 0.25 }, ext: { width: w, height: h }, editAs: "oneCell" });
+  };
+  poner(".logo-msmin img", 0.15);
+  poner(".logo-cli img", ultimaCol - 0.45);
+}
+function xlEncabezado(ws, ncol, titulo, sub) {
+  ws.getRow(1).height = 26; ws.getRow(2).height = 18; ws.getRow(3).height = 8;
+  ws.mergeCells(1, 3, 1, ncol - 2); ws.mergeCells(2, 3, 2, ncol - 2);
+  Object.assign(ws.getCell(1, 3), { value: titulo, font: { name: "Calibri", size: 16, bold: true, color: { argb: XL.azul } }, alignment: { horizontal: "center", vertical: "middle" } });
+  Object.assign(ws.getCell(2, 3), { value: sub, font: { name: "Calibri", size: 10, color: { argb: XL.gris } }, alignment: { horizontal: "center", vertical: "middle" } });
+  for (let c = 1; c <= ncol; c++) ws.getCell(3, c).border = { bottom: { style: "medium", color: { argb: XL.naranjo } } };
+}
+function xlCabecera(ws, fila, columnas) {
+  const r = ws.getRow(fila); r.height = 32;
+  columnas.forEach((c, i) => {
+    const cell = r.getCell(i + 1); cell.value = c.t;
+    cell.font = { bold: true, color: { argb: XL.blanco }, size: 10 };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: c.naranjo ? XL.naranjo : XL.azul } };
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    cell.border = { left: { style: "thin", color: { argb: XL.azulOsc } }, right: { style: "thin", color: { argb: XL.azulOsc } } };
+    ws.getColumn(i + 1).width = c.w;
+  });
+}
+function xlFilas(ws, desde, columnas, filas) {
+  filas.forEach((f, n) => {
+    const r = ws.getRow(desde + n);
+    const lineas = Math.max(1, ...columnas.map((c, i) => c.wrap && f[i] ? Math.ceil(String(f[i]).length / (c.w * 1.05)) : 1));
+    r.height = Math.max(18, lineas * 13 + 5);
+    columnas.forEach((c, i) => {
+      const cell = r.getCell(i + 1), val = f[i];
+      const est = val && typeof val === "object" && !(val instanceof Date) ? val : null;
+      cell.value = est ? est.v : (val ?? "");
+      cell.font = { size: 10, ...(c.bold ? { bold: true, color: { argb: XL.azul } } : {}) };
+      cell.alignment = { vertical: "middle", horizontal: c.al || "left", wrapText: !!c.wrap };
+      if (c.fmt) cell.numFmt = c.fmt;
+      cell.border = { bottom: { style: "hair", color: { argb: XL.linea } } };
+      const [fondo, texto] = est ? XL.est[est.c] || XL.est.none : [n % 2 ? XL.banda : null, null];
+      if (fondo) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fondo } };
+      if (texto) cell.font = { size: 10, bold: est.c !== "none", color: { argb: texto } };
+    });
+  });
+}
+async function exportarExcel() {
+  let ExcelJS;
+  try { toast("Preparando Excel…"); ExcelJS = await cargarExcelJS(); }
+  catch { toast("No se pudo cargar el generador de Excel. Revisa tu conexión."); return; }
   const { lista } = calcularFlota();
-  const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const H = ["Patente","N° interno","Marca","Modelo","Faena","Km actual","Estado","Vence revisión técnica","Km próxima mantención","Km restantes","Vence extintor","Baliza","Pértiga","Luces malas","Neumático repuesto","Último check","Conductor","Combustible %","Alerta fatiga","Ítems con problema"];
-  const rows = lista.map(r => [showPat(r.v.patente), r.v.interno, r.v.marca, r.v.modelo, r.v.faena, r.km, { ok: "Operativa", warn: "Atención", crit: "Crítica" }[r.global], r.rtFecha || "", r.mant.prox || "", r.mant.rest ?? "", r.extFecha || "",
-    r.baliza.txt, r.pertiga.txt, (r.luces.malas || []).map(k => ITEM_NAME[k]).join(" / "), r.repuesto.txt, r.ult ? r.ult.fecha.slice(0, 10) : "", r.ult ? r.ult.conductor : "",
-    r.ult && r.ult.combustible != null ? r.ult.combustible : "", r.ult ? (r.ult.fatigaAlerta ? "Sí" : "No") : "",
-    r.ult ? Object.entries(r.ult.items || {}).filter(([, s]) => esFalla(s)).map(([k, s]) => ITEM_NAME[k] + " (" + ESTADO_TXT[s] + ")").join(" / ") : ""]);
-  const csv = "\ufeff" + [H, ...rows].map(r => r.map(q).join(";")).join("\r\n");
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  a.download = `flota-msmin-${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  const ahora = new Date(), fechaTxt = ahora.toLocaleString("es-CL", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const wb = new ExcelJS.Workbook(); wb.creator = "Flota MSMIN"; wb.created = ahora;
+  const ESTADO = { ok: "Operativa", warn: "Atención", crit: "Crítica" };
+  const ordenN = { crit: 0, warn: 1, ok: 2 };
+  const filasFlota = [...lista].sort((a, b) => ordenN[a.global] - ordenN[b.global] || a.v.patente.localeCompare(b.v.patente));
+
+  // ---- Hoja 1: estado de la flota ----
+  const C1 = [
+    { t: "Patente", w: 11, bold: true, al: "center" }, { t: "N° interno", w: 10, al: "center" }, { t: "Vehículo", w: 22 }, { t: "Faena", w: 14 },
+    { t: "Km actual", w: 11, fmt: "#,##0", al: "right" }, { t: "Estado", w: 12, al: "center", naranjo: true },
+    { t: "Vence rev. técnica", w: 13, fmt: "dd-mm-yyyy", al: "center" }, { t: "Rev. técnica", w: 16, al: "center" },
+    { t: "Próx. mantención (km)", w: 13, fmt: "#,##0", al: "right" }, { t: "Mantención", w: 16, al: "center" },
+    { t: "Vence extintor", w: 13, fmt: "dd-mm-yyyy", al: "center" }, { t: "Extintor", w: 16, al: "center" },
+    { t: "Baliza", w: 10, al: "center" }, { t: "Pértiga", w: 10, al: "center" }, { t: "Luces", w: 10, al: "center" }, { t: "Neumático repuesto", w: 12, al: "center" },
+    { t: "Último check", w: 16, fmt: "dd-mm-yyyy hh:mm", al: "center" }, { t: "Check", w: 11, al: "center" }, { t: "Conductor", w: 20 },
+    { t: "Combustible", w: 11, fmt: "0\" %\"", al: "center" }, { t: "Fatiga", w: 9, al: "center" }, { t: "Detalle de problemas", w: 46, wrap: true }
+  ];
+  const ws = wb.addWorksheet("Estado flota", { views: [{ state: "frozen", xSplit: 1, ySplit: 7, showGridLines: false }],
+    pageSetup: { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "7:7" } });
+  xlEncabezado(ws, C1.length, "Estado de flota · MSMIN", `Generado el ${fechaTxt} · ${lista.length} camioneta${lista.length === 1 ? "" : "s"}`);
+  xlLogos(wb, ws, C1.length);
+  // Resumen en bloques de color
+  const cuenta = f => lista.filter(f).length;
+  const resumen = [["Operativas", cuenta(r => r.global === "ok"), "ok"], ["Atención", cuenta(r => r.global === "warn"), "warn"], ["Críticas", cuenta(r => r.global === "crit"), "crit"],
+    ["Rev. técnica vencida", cuenta(r => r.rt.n === 2), "crit"], ["Extintor vencido", cuenta(r => r.ext.n === 2), "crit"], ["Mantención pasada", cuenta(r => r.mant.n === 2), "crit"],
+    ["Sin baliza / pértiga", cuenta(r => r.baliza.n === 2 || r.pertiga.n === 2), "crit"], ["Luces malas", cuenta(r => r.luces.n === 2), "crit"],
+    ["Sin neum. repuesto", cuenta(r => r.repuesto.n === 2), "crit"], ["Sin check reciente", cuenta(r => r.chk.n === 1), "warn"]];
+  ws.getRow(4).height = 6; ws.getRow(5).height = 16; ws.getRow(6).height = 26;
+  resumen.forEach(([t, n, c], i) => {
+    const col = 3 + i * 2; if (col + 1 > C1.length) return;
+    const [fondo, texto] = n ? XL.est[c] : ["FFF1F3F8", XL.gris];
+    ws.mergeCells(5, col, 5, col + 1); ws.mergeCells(6, col, 6, col + 1);
+    const a = ws.getCell(5, col), b = ws.getCell(6, col);
+    a.value = t; a.font = { size: 8, bold: true, color: { argb: texto } }; a.alignment = { horizontal: "center", vertical: "bottom" };
+    b.value = n; b.font = { size: 16, bold: true, color: { argb: texto } }; b.alignment = { horizontal: "center", vertical: "middle" };
+    for (const r of [5, 6]) for (const cc of [col, col + 1]) ws.getCell(r, cc).fill = { type: "pattern", pattern: "solid", fgColor: { argb: fondo } };
+  });
+  xlCabecera(ws, 7, C1);
+  const est = (c, v) => ({ c, v });
+  xlFilas(ws, 8, C1, filasFlota.map(r => {
+    const u = r.ult, prob = [...r.alertas];
+    if (r.otros.length) prob.push(...r.otros.map(k => ITEM_NAME[k] + " (" + ESTADO_TXT[u.items[k]] + ")"));
+    if (r.luces.malas && r.luces.malas.length) prob.push("Luces: " + r.luces.malas.map(k => ITEM_NAME[k]).join(", "));
+    return [showPat(r.v.patente), r.v.interno || "", [r.v.marca, r.v.modelo, r.v.anio].filter(Boolean).join(" "), r.v.faena || "", r.km || null,
+      est(r.global, ESTADO[r.global]), xlFecha(r.rtFecha), est(r.rt.cls, r.rt.txt), r.mant.prox || null, est(r.mant.cls, r.mant.txt),
+      xlFecha(r.extFecha), est(r.ext.cls, r.ext.txt), est(r.baliza.cls, r.baliza.txt), est(r.pertiga.cls, r.pertiga.txt), est(r.luces.cls, r.luces.txt), est(r.repuesto.cls, r.repuesto.txt),
+      u ? xlFechaHora(u.fecha) : null, est(r.chk.cls, r.chk.txt), u ? u.conductor : "", u && u.combustible != null ? +u.combustible : null,
+      u ? est(u.fatigaAlerta ? "crit" : "ok", u.fatigaAlerta ? "Riesgo" : "OK") : "", [...new Set(prob)].join(" · ")];
+  }));
+  if (filasFlota.length) ws.autoFilter = { from: { row: 7, column: 1 }, to: { row: 7 + filasFlota.length, column: C1.length } };
+
+  // ---- Hoja 2: historial de checks ----
+  const regs = todosRegistros().sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const C2 = [{ t: "Fecha", w: 16, fmt: "dd-mm-yyyy hh:mm", al: "center" }, { t: "Patente", w: 11, bold: true, al: "center" }, { t: "Conductor", w: 22 }, { t: "SAP", w: 10, al: "center" },
+    { t: "Km", w: 11, fmt: "#,##0", al: "right" }, { t: "Km mant.", w: 11, fmt: "#,##0", al: "right" }, { t: "Combustible", w: 11, fmt: "0\" %\"", al: "center" },
+    { t: "Fatiga", w: 9, al: "center" }, { t: "Resultado", w: 14, al: "center", naranjo: true }, { t: "Ítems con problema", w: 48, wrap: true }, { t: "Observaciones", w: 40, wrap: true }];
+  const ws2 = wb.addWorksheet("Checks", { views: [{ state: "frozen", ySplit: 4, showGridLines: false }], pageSetup: { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+  xlEncabezado(ws2, C2.length, "Historial de check list diario", `${regs.length} registro${regs.length === 1 ? "" : "s"} · generado el ${fechaTxt}`);
+  xlLogos(wb, ws2, C2.length);
+  xlCabecera(ws2, 4, C2);
+  xlFilas(ws2, 5, C2, regs.map(r => {
+    const malos = Object.entries(r.items || {}).filter(([, s]) => esFalla(s));
+    return [xlFechaHora(r.fecha), showPat(r.patente), r.conductor || "", r.sap || "", +r.km || null, +r.kmMant || null, r.combustible != null && r.combustible !== "" ? +r.combustible : null,
+      est(r.fatigaAlerta ? "crit" : "ok", r.fatigaAlerta ? "Riesgo" : "OK"), malos.length ? est("crit", `${malos.length} problema${malos.length > 1 ? "s" : ""}`) : est("ok", "Todo bueno"),
+      malos.map(([k, s]) => `${ITEM_NAME[k]} (${ESTADO_TXT[s]})`).join(" · "), r.obs || ""];
+  }));
+  if (regs.length) ws2.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4 + regs.length, column: C2.length } };
+
+  const buf = await wb.xlsx.writeBuffer();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  a.download = `flota-msmin-${ahora.toISOString().slice(0, 10)}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 
 // ---------- Vista admin: Vehículos ----------
@@ -978,7 +1110,7 @@ document.addEventListener("click", async ev => {
   else if (a === "cerrar") { S.drawer = null; renderOverlay(); }
   else if (a === "refrescar") { await cargar(); toast("Datos actualizados"); }
   else if (a === "salir") cerrarSesion();
-  else if (a === "csv") exportarCSV();
+  else if (a === "csv") exportarExcel();
   else if (a === "mi-clave") { S.tab = "clave"; render(); }
   else if (a === "volver") { elegirTab(true); render(); }
   else if (a === "editar-user") { S.editUser = t.dataset.u; render(); window.scrollTo(0, 0); }
