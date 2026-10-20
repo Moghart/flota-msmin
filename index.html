@@ -280,7 +280,7 @@ const S = {
 
 // ---------- Conexión con Supabase ----------
 const SUPABASE_URL = "https://atbsumphjckdhygefuld.supabase.co";
-const SUPABASE_KEY = "PEGAR_AQUI_LA_PUBLISHABLE_KEY"; // Supabase > Project Settings > API Keys (anon / publishable). Es pública, no uses la service_role.
+const SUPABASE_KEY = "sb_publishable_5L5ArY4PU8-YtPs_9xdDFw_fM4UQH9n"; // Supabase > Project Settings > API Keys (anon / publishable). Es pública, no uses la service_role.
 const DOMINIO = "flota-msmin.app";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "msmin.auth" } });
 const normUser = u => String(u || "").trim().toLowerCase().replace(/[.\s-]/g, "");
