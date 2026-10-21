@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Flota MSMIN</title>
 <meta name="theme-color" content="#1f3f95">
-<title>Flota MSMIN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Flota MSMIN">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <style>
@@ -190,6 +196,8 @@ tbody tr:hover td{background:var(--surface-2)}
 .hits button{border:0;background:var(--surface);padding:8px 10px;text-align:left;cursor:pointer;display:flex;gap:8px;align-items:center}
 .hits button:hover{background:var(--surface-2)}
 .login{display:grid;place-items:center;padding-block:40px}
+#avisos{display:flex;flex-direction:column;gap:8px;padding-top:12px}#avisos:empty{display:none}
+.aviso{font-size:.9rem}.aviso-inst{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .rc.rc-pdf{grid-template-columns:auto 1fr auto auto}
 .login form{width:min(400px,100%);display:flex;flex-direction:column;gap:14px;padding:24px}
@@ -285,7 +293,9 @@ const S = {
 const SUPABASE_URL = "https://atbsumphjckdhygefuld.supabase.co";
 const SUPABASE_KEY = "sb_publishable_5L5ArY4PU8-YtPs_9xdDFw_fM4UQH9n"; // Supabase > Project Settings > API Keys (anon / publishable). Es pública, no uses la service_role.
 const DOMINIO = "flota-msmin.app";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "msmin.auth" } });
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "msmin.auth" },
+  // Con señal débil no se espera para siempre: a los 15 s se trata como "sin conexión"
+  global: { fetch: (u, o = {}) => { const c = new AbortController(), t = setTimeout(() => c.abort(), 15000); return fetch(u, { ...o, signal: o.signal || c.signal }).finally(() => clearTimeout(t)); } } });
 const normUser = u => String(u || "").trim().toLowerCase().replace(/[.\s-]/g, "");
 const vehDeDb = r => ({ patente: r.patente, interno: r.interno || "", marca: r.marca || "", modelo: r.modelo || "", anio: r.anio, faena: r.faena || "",
   kmActual: r.km_actual, kmUltimaMant: r.km_ultima_mant, intervaloKm: r.intervalo_km || 10000, venceRevTec: r.vence_rev_tec, venceExtintor: r.vence_extintor, vencePermiso: r.vence_permiso, kmProxMant: r.km_prox_mant, revisar: !!r.revisar });
@@ -306,8 +316,15 @@ function checkDeDb(r, usuarios) {
     extintorVence: r.extintor_vence, revTecVence: r.rev_tec_vence, permisoVence: r.permiso_vence, interno: r.interno || "", obs: r.obs || "", firma: !!r.tiene_firma, items: r.items || {}, fatiga: r.fatiga || {} };
 }
 const fallo = e => { throw new Error((e && e.message) || String(e)); };
+// ---------- Modo sin conexión ----------
+const esErrRed = e => !navigator.onLine || /SIN_RED|Failed to fetch|NetworkError|Load failed|network|fetch failed|abort|AuthRetryableFetchError/i.test((e && (e.message || e.name)) || String(e));
+const leerJSON = (k, def) => { try { return JSON.parse(lsGet(k)) ?? def; } catch { return def; } };
+const pendientes = () => leerJSON("msmin.pendientes", []);
+const guardarPendientes = l => { try { localStorage.setItem("msmin.pendientes", JSON.stringify(l)); } catch { toast("El teléfono no tiene espacio para guardar el check."); } };
+const nuevoId = () => (crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c => (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)));
 async function miPerfil() {
-  const { data: { user } } = await sb.auth.getUser();
+  const { data: { user }, error: eU } = await sb.auth.getUser();
+  if (eU && esErrRed(eU)) throw new Error("SIN_RED");
   if (!user) throw new Error("SESION");
   const { data: p, error } = await sb.from("perfiles").select("*").eq("id", user.id).maybeSingle();
   if (error) fallo(error);
@@ -371,9 +388,11 @@ const SERVER = {
     return { user: userDePerfil(p), flota, checks: ch.map(r => checkDeDb(r, porId)), usuarios, planilla: "" };
   },
   async guardarCheck(reg, firma) {
-    const fila = { patente: reg.patente, conductor: reg.conductor, sap: reg.sap || "", km: reg.km, km_mant: reg.kmMant, combustible: reg.combustible,
+    const fila = { id: reg.id, fecha: reg.fecha, patente: reg.patente, conductor: reg.conductor, sap: reg.sap || "", km: reg.km, km_mant: reg.kmMant, combustible: reg.combustible,
       items: reg.items, fatiga: reg.fatiga, fatiga_alerta: !!reg.fatigaAlerta, extintor_vence: reg.extintorVence || null, rev_tec_vence: reg.revTecVence || null, permiso_vence: reg.permisoVence || null, interno: reg.interno || "", vehiculo: reg.vehiculo || "", obs: reg.obs || "", firma };
-    const { data, error } = await sb.from("checks").insert(fila).select(CHECK_COLS).single(); if (error) fallo(error);
+    const { data, error } = await sb.from("checks").insert(fila).select(CHECK_COLS).single();
+    if (error && error.code === "23505") return { ...reg, firma: true }; // ya se había subido en un intento anterior
+    if (error) fallo(error);
     return checkDeDb(data, {});
   },
   async getFlota() { return ensureFlota(); },
@@ -404,6 +423,7 @@ function llamar(fn, ...args) {
   if (!["login","registrar","recuperar","nuevaClave"].includes(fn)) args = args.slice(1); // el primer argumento era el token de Apps Script
   return SERVER[fn](...args).catch(e => {
     const msg = (e && e.message) || String(e);
+    if (esErrRed(e)) throw new Error(msg); // sin señal no se cierra la sesión
     if (/SESION|JWT|expired/i.test(msg)) { cerrarSesion(true); throw new Error("Tu sesión expiró. Vuelve a ingresar."); }
     throw new Error(msg);
   });
@@ -432,7 +452,8 @@ function toast(msg) {
 
 // ---------- Cálculo de estado por vehículo ----------
 function todosRegistros() { return S.checks.slice(); }
-const misChecks = () => S.checks.filter(r => r.usuario === (S.user && S.user.usuario));
+const misChecks = () => [...pendientes().filter(p => p.usuario === (S.user && S.user.usuario)).map(p => ({ ...p.reg, pendiente: true })),
+  ...S.checks.filter(r => r.usuario === (S.user && S.user.usuario))];
 function estadoVehiculo(v, regsPorPat) {
   const regs = (regsPorPat[v.patente] || []);
   const ult = regs[0] || null;
@@ -512,8 +533,19 @@ function renderWho() {
   $("#who").innerHTML = `<span>${esc(S.user.nombre || S.user.usuario)}</span><span class="role">${S.admin ? "Administrador" : "Conductor"}</span>
     <button class="btn ghost small" data-act="mi-clave">Clave</button><button class="btn ghost small" data-act="salir">Salir</button>`;
 }
+function renderAvisos() {
+  let box = $("#avisos"); if (!box) { box = document.createElement("div"); box.id = "avisos"; box.className = "wrap"; $("#app").before(box); }
+  const n = S.user ? pendientes().filter(p => p.usuario === S.user.usuario).length : 0;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone && !lsGet("msmin.iosOk");
+  box.innerHTML = [
+    S.offline || !navigator.onLine ? `<div class="notice aviso">Sin conexión. Puedes hacer el check igual: se guarda en el teléfono y se envía solo cuando vuelva la señal.${n ? ` <b>${n} por enviar.</b>` : ""}</div>`
+      : n ? `<div class="notice aviso">${n} check${n > 1 ? "s" : ""} guardado${n > 1 ? "s" : ""} sin conexión. <button class="linkbtn" data-act="sync">Enviar ahora</button></div>` : "",
+    S.instalar ? `<div class="notice aviso aviso-inst"><span>Instala la app en tu teléfono para abrirla con un toque, incluso sin internet.</span><button class="btn primary small" data-act="instalar">Instalar app</button></div>` : "",
+    ios ? `<div class="notice aviso aviso-inst"><span>Para instalar en iPhone: toca <b>Compartir</b> y luego <b>Agregar a inicio</b>.</span><button class="btn ghost small" data-act="ios-ok">Entendido</button></div>` : ""
+  ].join("");
+}
 function render() {
-  renderTabs(); renderWho();
+  renderTabs(); renderWho(); renderAvisos();
   const app = $("#app");
   if (!S.token) { app.innerHTML = renderLogin(); renderOverlay(); const u = $("#l-user"); if (u && !u.value) u.focus(); return; }
   if (!S.flotaReady) { app.innerHTML = `<div class="empty"><b>Cargando la flota…</b>Leyendo la planilla de MSMIN.</div>`; return; }
@@ -537,7 +569,8 @@ function renderCheck() {
   if (S.sent) {
     const r = S.sent, malos = Object.entries(r.items).filter(([, s]) => esFalla(s));
     return `<section class="view"><div class="panel">
-      <div class="notice good">Check enviado. ${plate(r.patente)} quedó registrada con ${nf(r.km)} km el ${esc(fmtDT(r.fecha))}.</div>
+      ${r.pendiente ? `<div class="notice">Sin conexión: el check de ${plate(r.patente)} quedó guardado en este teléfono y se enviará solo cuando vuelva la señal. Ya puedes descargar el PDF.</div>`
+        : `<div class="notice good">Check enviado. ${plate(r.patente)} quedó registrada con ${nf(r.km)} km el ${esc(fmtDT(r.fecha))}.</div>`}
       ${r.fatigaAlerta ? `<div class="notice err" style="margin-top:12px">Tu encuesta de fatiga indica riesgo. Informa a tu supervisor antes de conducir.</div>` : ""}
       ${malos.length ? `<h3 style="margin:16px 0 8px">Ítems reportados con problema (${malos.length})</h3>
         <div class="chk-list">${malos.map(([k, s]) => `<div><span>${esc(ITEM_NAME[k])}</span>${chip("crit", ESTADO_TXT[s])}</div>`).join("")}</div>
@@ -648,7 +681,7 @@ function renderMisChecks() {
   const mine = misChecks(); if (!mine.length) return "";
   return `<div class="panel"><div class="panel-h"><h2>Mis últimos checks</h2></div><div class="recent">
     ${mine.slice(0, 8).map(r => { const m = nFallas(r);
-      return `<div class="rc rc-pdf">${plate(r.patente)}<span class="num">${esc(fmtDT(r.fecha))} · ${nf(r.km)} km</span>${m ? chip("crit", m + " con problema") : chip("ok", "Todo bueno")}<button class="btn small" data-act="pdf" data-id="${esc(r.id)}" aria-label="Descargar PDF del check">PDF</button></div>`; }).join("")}
+      return `<div class="rc rc-pdf">${plate(r.patente)}<span class="num">${esc(fmtDT(r.fecha))} · ${nf(r.km)} km</span>${r.pendiente ? chip("warn", "Por enviar") : m ? chip("crit", m + " con problema") : chip("ok", "Todo bueno")}<button class="btn small" data-act="pdf" data-id="${esc(r.id)}" aria-label="Descargar PDF del check">PDF</button></div>`; }).join("")}
   </div></div>`;
 }
 async function enviarCheck() {
@@ -669,16 +702,25 @@ async function enviarCheck() {
   const v = S.flota[pat];
   if (!errs.length && v && v.kmActual && +d.km < +v.kmActual) errs.push(`el KM actual es menor al último registrado (${nf(v.kmActual)} km); corrígelo`);
   if (errs.length) { d._try = true; render(); $("#formErr").innerHTML = `<div class="notice err">Para enviar: ${esc(errs.join(", "))}.</div>`; return; }
-  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const id = nuevoId();
   const reg = { id, patente: pat, interno: v ? v.interno || "" : d.interno.trim(), vehiculo: v ? "" : d.vehiculo.trim(), km: Math.round(+d.km), kmMant: d.kmMant ? Math.round(+d.kmMant) : null, combustible: Math.round(+d.combustible),
     conductor: d.conductor, sap: d.sap, fecha: new Date().toISOString(), items: { ...d.items }, fatiga: { ...d.fatiga },
     fatigaAlerta: alertaFatiga(d.fatiga), extintorVence: d.extintorVence || null, revTecVence: d.revTecVence || null, permisoVence: d.permisoVence || null, obs: d.obs || "", firma: true };
   const btn = $("#checkForm button[type=submit]"); btn.disabled = true; btn.textContent = "Enviando…";
   try {
-    const guardado = await api("guardarCheck", reg, d.firma);
-    S.checks = [guardado, ...S.checks];
-    try { S.flota = await api("getFlota"); } catch {}
-    reg.fecha = guardado.fecha; reg.id = guardado.id; FIRMAS[guardado.id] = d.firma;
+    let guardado = null;
+    try { guardado = await api("guardarCheck", reg, d.firma); }
+    catch (e) { if (!esErrRed(e)) throw e; }
+    FIRMAS[reg.id] = d.firma;
+    if (guardado) {
+      S.checks = [guardado, ...S.checks];
+      try { S.flota = await api("getFlota"); guardarCache(); } catch {}
+      reg.fecha = guardado.fecha;
+    } else {
+      // Sin señal: queda guardado en el teléfono y se sube solo al volver la conexión
+      guardarPendientes([...pendientes(), { reg, firma: d.firma, usuario: S.user && S.user.usuario }]);
+      reg.pendiente = true;
+    }
     lsSet("msmin.patente", pat); lsSet("msmin.conductor", d.conductor); lsSet("msmin.sap", d.sap);
     S.sent = reg; S.draft = null; render(); window.scrollTo(0, 0);
   } catch (e) {
@@ -1247,12 +1289,12 @@ async function ingresar() {
     tarea = async () => entrar(await llamar("login", u, p));
   }
   btn.disabled = true; btn.textContent = "Un momento…";
-  try { await tarea(); } catch (e) { btn.disabled = false; btn.textContent = txt; fallo(e.message); }
+  try { await tarea(); } catch (e) { btn.disabled = false; btn.textContent = txt; fallo(esErrRed(e) ? "Sin conexión. Necesitas internet para ingresar; después la app funciona sin señal." : e.message); }
 }
 function cerrarSesion(expirada) {
   if (S.token && !expirada) llamar("logout", S.token).catch(() => {});
   S.token = null; S.user = null; S.admin = false; S.checks = []; S.flota = {}; S.flotaReady = false; S.usuarios = []; S.draft = null; S.sent = null;
-  try { localStorage.removeItem("msmin.token"); } catch {}
+  try { localStorage.removeItem("msmin.token"); localStorage.removeItem("msmin.cache"); } catch {}
   render(); if (expirada) toast("Tu sesión expiró. Vuelve a ingresar.");
 }
 function renderClave() {
@@ -1305,16 +1347,41 @@ async function guardarUser() {
   try { S.usuarios = await api("guardarUsuario", u, !S.editUser); toast(S.editUser ? "Usuario actualizado" : `Usuario ${u.usuario} creado`); S.editUser = null; render(); }
   catch (e) { btn.disabled = false; $("#userErr").innerHTML = `<div class="notice err">${esc(e.message)}</div>`; }
 }
+function guardarCache() {
+  // Copia local para abrir la app sin internet (los checks se limitan para no llenar el teléfono)
+  try { localStorage.setItem("msmin.cache", JSON.stringify({ user: S.user, flota: S.flota, checks: S.checks.slice(0, S.admin ? 400 : 20), usuarios: S.usuarios, t: Date.now() })); } catch {}
+}
 async function cargar(silencioso) {
   if (!S.token || S.cargando) return;
   S.cargando = true;
   try {
     const d = await api("getData");
     S.user = d.user; S.admin = !!d.user.admin; S.flota = d.flota || {}; S.checks = d.checks || []; S.usuarios = d.usuarios || []; S.planilla = d.planilla || "";
-    S.flotaReady = true; elegirTab(); softRender();
-  } catch (e) { if (S.token && !silencioso) toast("No se pudo leer la planilla: " + e.message); }
+    S.flotaReady = true; S.offline = false; guardarCache(); elegirTab(); softRender();
+    if (pendientes().length) setTimeout(sincronizar, 500);
+  } catch (e) {
+    const c = leerJSON("msmin.cache", null);
+    if (S.token && esErrRed(e) && c && c.user) {
+      S.user = c.user; S.admin = !!c.user.admin; S.flota = c.flota || {}; S.checks = c.checks || []; S.usuarios = c.usuarios || [];
+      S.flotaReady = true; S.offline = true; elegirTab(); softRender();
+    } else if (S.token && esErrRed(e)) { S.offline = true; if (!silencioso) toast("Sin conexión. Conéctate una vez para descargar los datos de la flota."); }
+    else if (S.token && !silencioso) toast("No se pudieron leer los datos: " + e.message);
+  }
   finally { S.cargando = false; }
 }
+async function sincronizar() {
+  const lista = pendientes(); if (!lista.length || !S.token || S._sync || !navigator.onLine) return;
+  S._sync = true; let subidos = 0;
+  try {
+    for (const p of lista) {
+      try { await SERVER.guardarCheck(p.reg, p.firma); subidos++; guardarPendientes(pendientes().filter(x => x.reg.id !== p.reg.id)); }
+      catch (e) { if (esErrRed(e)) break; console.warn("Check pendiente rechazado", e); }
+    }
+  } finally { S._sync = false; }
+  if (subidos) { toast(`${subidos} check${subidos > 1 ? "s" : ""} guardado${subidos > 1 ? "s" : ""} sin conexión ya se enviaron`); await cargar(true); }
+}
+window.addEventListener("online", () => { S.offline = false; if (S.token) { cargar(true); sincronizar(); } else render(); });
+window.addEventListener("offline", () => { S.offline = true; softRender(); });
 
 // ---------- Eventos ----------
 document.addEventListener("click", async ev => {
@@ -1344,8 +1411,11 @@ document.addEventListener("click", async ev => {
   else if (a === "refrescar") { await cargar(); toast("Datos actualizados"); }
   else if (a === "salir") cerrarSesion();
   else if (a === "csv") exportarExcel();
+  else if (a === "sync") sincronizar();
+  else if (a === "instalar") { const p = S.instalar; S.instalar = null; renderAvisos(); if (p) { p.prompt(); try { await p.userChoice; } catch {} } }
+  else if (a === "ios-ok") { lsSet("msmin.iosOk", "1"); renderAvisos(); }
   else if (a === "pdf-enviado") descargarPDF(S.sent && { ...S.sent, firmaData: FIRMAS[S.sent.id] });
-  else if (a === "pdf") descargarPDF(S.checks.find(c => c.id === t.dataset.id));
+  else if (a === "pdf") { const p = pendientes().find(x => x.reg.id === t.dataset.id); descargarPDF(p ? { ...p.reg, firmaData: p.firma } : S.checks.find(c => c.id === t.dataset.id)); }
   else if (a === "mi-clave") { S.tab = "clave"; render(); }
   else if (a === "volver") { elegirTab(true); render(); }
   else if (a === "editar-user") { S.editUser = t.dataset.u; render(); window.scrollTo(0, 0); }
@@ -1425,6 +1495,10 @@ function start() {
   });
   S.token = lsGet("msmin.auth") && S.authModo !== "nueva" ? "sb" : null;
   if (S.token) { S.flotaReady = false; render(); cargar(); } else render();
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.instalar = e; renderAvisos(); });
+  window.addEventListener("appinstalled", () => { S.instalar = null; renderAvisos(); toast("App instalada"); });
+  setInterval(() => { if (navigator.onLine && pendientes().length) sincronizar(); }, 60000);
   // El panel se refresca solo cada 2 minutos para ver los checks nuevos
   setInterval(() => { if (S.admin && S.tab === "panel" && !S.drawer && document.visibilityState === "visible") cargar(true); }, 120000);
 }
