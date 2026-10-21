@@ -46,3 +46,25 @@ begin
    where patente = new.patente and (new.rev_tec_vence is not null or new.permiso_vence is not null or new.extintor_vence is not null);
   return new;
 end $function$;
+
+-- 6) Camionetas nuevas creadas desde el check del conductor ("por revisar")
+alter table public.checks add column if not exists interno text not null default '';
+alter table public.checks add column if not exists vehiculo text not null default '';
+alter table public.vehiculos add column if not exists revisar boolean not null default false;
+alter policy checks_crear on public.checks with check (usuario_id = auth.uid() and es_activo() and length(patente) between 5 and 8);
+create or replace function public.check_actualiza_km()
+ returns trigger language plpgsql security definer set search_path to 'public' as $function$
+begin
+  insert into vehiculos (patente, interno, modelo, km_actual, vence_rev_tec, vence_permiso, vence_extintor, revisar, actualizado)
+  values (new.patente, coalesce(new.interno, ''), coalesce(new.vehiculo, ''), new.km, new.rev_tec_vence, new.permiso_vence, new.extintor_vence, true, now())
+  on conflict (patente) do nothing;
+  update vehiculos set km_actual = new.km, actualizado = now()
+   where patente = new.patente and (km_actual is null or km_actual < new.km);
+  update vehiculos set vence_rev_tec = coalesce(new.rev_tec_vence, vence_rev_tec),
+                       vence_permiso = coalesce(new.permiso_vence, vence_permiso),
+                       vence_extintor = coalesce(new.extintor_vence, vence_extintor),
+                       interno = case when coalesce(interno, '') = '' then coalesce(new.interno, '') else interno end,
+                       actualizado = now()
+   where patente = new.patente;
+  return new;
+end $function$;
