@@ -189,6 +189,8 @@ tbody tr:hover td{background:var(--surface-2)}
 .hits button{border:0;background:var(--surface);padding:8px 10px;text-align:left;cursor:pointer;display:flex;gap:8px;align-items:center}
 .hits button:hover{background:var(--surface-2)}
 .login{display:grid;place-items:center;padding-block:40px}
+.linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.rc.rc-pdf{grid-template-columns:auto 1fr auto auto}
 .login form{width:min(400px,100%);display:flex;flex-direction:column;gap:14px;padding:24px}
 a.btn{text-decoration:none;color:inherit;display:inline-flex;align-items:center}
 .who .btn{padding:4px 9px}
@@ -289,7 +291,13 @@ const vehDeDb = r => ({ patente: r.patente, interno: r.interno || "", marca: r.m
 const vehADb = v => ({ patente: normPat(v.patente), interno: v.interno || "", marca: v.marca || "", modelo: v.modelo || "", anio: v.anio || null, faena: v.faena || "",
   km_actual: v.kmActual ?? null, km_ultima_mant: v.kmUltimaMant ?? null, intervalo_km: v.intervaloKm || 10000, vence_rev_tec: v.venceRevTec || null,
   vence_extintor: v.venceExtintor || null, actualizado: new Date().toISOString() });
-const usuDeDb = u => ({ usuario: u.usuario, nombre: u.nombre, sap: u.sap || "", rol: u.rol, activo: u.activo, ultimo: u.ultimo_ingreso || "" });
+const usuDeDb = u => ({ usuario: u.usuario, nombre: u.nombre, sap: u.sap || "", rut: u.rut || "", email: u.email || "", rol: u.rol, activo: u.activo, ultimo: u.ultimo_ingreso || "" });
+// Se entra con el correo; los usuarios antiguos sin correo siguen entrando con su nombre de usuario
+const correoLogin = u => { u = String(u || "").trim().toLowerCase(); return u.includes("@") ? u : `${normUser(u)}@${DOMINIO}`; };
+const URL_APP = location.origin + location.pathname;
+const userDePerfil = p => ({ usuario: p.usuario, nombre: p.nombre, sap: p.sap || "", rut: p.rut || "", rol: p.rol, admin: p.rol === "admin" });
+const errAuth = m => /invalid/i.test(m) ? "Correo o clave incorrectos." : /banned/i.test(m) ? "Tu usuario está desactivado. Habla con un administrador."
+  : /not confirmed/i.test(m) ? "Aún no confirmas tu correo. Revisa tu bandeja de entrada." : /rate limit|security purposes/i.test(m) ? "Demasiados intentos. Espera un minuto e inténtalo de nuevo." : m;
 const CHECK_COLS = "id,fecha,patente,usuario_id,conductor,sap,km,km_mant,combustible,items,fatiga,fatiga_alerta,extintor_vence,obs,tiene_firma";
 function checkDeDb(r, usuarios) {
   return { id: r.id, fecha: r.fecha, patente: r.patente, km: r.km, kmMant: r.km_mant, combustible: r.combustible, conductor: r.conductor, sap: r.sap || "",
@@ -315,15 +323,35 @@ async function listaUsuarios() {
 }
 const SERVER = {
   async login(usuario, clave) {
-    const { error } = await sb.auth.signInWithPassword({ email: `${normUser(usuario)}@${DOMINIO}`, password: clave });
-    if (error) throw new Error(/invalid/i.test(error.message) ? "Usuario o clave incorrectos." : /banned/i.test(error.message) ? "Tu usuario está desactivado. Habla con un administrador." : error.message);
+    const { error } = await sb.auth.signInWithPassword({ email: correoLogin(usuario), password: clave });
+    if (error) throw new Error(errAuth(error.message));
+    return SERVER.entrar();
+  },
+  async entrar() {
     let p; try { p = await miPerfil(); } catch { throw new Error("Tu usuario no está habilitado. Habla con un administrador."); }
     sb.rpc("marcar_ingreso").then(() => {}, () => {});
-    return { token: "sb", user: { usuario: p.usuario, nombre: p.nombre, rol: p.rol, admin: p.rol === "admin" } };
+    return { token: "sb", user: userDePerfil(p) };
+  },
+  async registrar(r) {
+    const { data, error } = await sb.auth.signUp({ email: r.email, password: r.clave, options: { data: { nombre: r.nombre, rut: r.rut, sap: r.sap }, emailRedirectTo: URL_APP } });
+    if (error) throw new Error(/already|registered|exists/i.test(error.message) ? "Ese correo ya tiene cuenta. Ingresa o usa ¿Olvidaste tu clave?" : errAuth(error.message));
+    if (data.user && Array.isArray(data.user.identities) && !data.user.identities.length) throw new Error("Ese correo ya tiene cuenta. Ingresa o usa ¿Olvidaste tu clave?");
+    if (!data.session) return { confirmar: true };
+    return SERVER.entrar();
+  },
+  async recuperar(email) {
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: URL_APP });
+    if (error) throw new Error(errAuth(error.message)); return true;
+  },
+  async nuevaClave(clave) {
+    const { error } = await sb.auth.updateUser({ password: clave });
+    if (error) throw new Error(/different|same/i.test(error.message) ? "La nueva clave debe ser distinta a la anterior." : errAuth(error.message));
+    return SERVER.entrar();
   },
   async logout() { await sb.auth.signOut(); return true; },
   async cambiarClave(actual, nueva) {
-    const { error: e1 } = await sb.auth.signInWithPassword({ email: `${S.user.usuario}@${DOMINIO}`, password: actual });
+    const { data: { user } } = await sb.auth.getUser();
+    const { error: e1 } = await sb.auth.signInWithPassword({ email: user ? user.email : correoLogin(S.user.usuario), password: actual });
     if (e1) throw new Error("La clave actual no es correcta.");
     const { error } = await sb.auth.updateUser({ password: nueva }); if (error) fallo(error); return true;
   },
@@ -333,13 +361,13 @@ const SERVER = {
     const flota = await ensureFlota();
     let usuarios = [], porId = { [p.id]: p };
     if (admin) {
-      const { data } = await sb.from("perfiles").select("id,usuario,nombre,sap,rol,activo,ultimo_ingreso").order("nombre");
+      const { data } = await sb.from("perfiles").select("id,usuario,nombre,sap,rut,email,rol,activo,ultimo_ingreso").order("nombre");
       (data || []).forEach(u => porId[u.id] = u); usuarios = (data || []).map(usuDeDb);
     }
     let q = sb.from("checks").select(CHECK_COLS).order("fecha", { ascending: false }).limit(admin ? 3000 : 10);
     const { data: ch, error } = await q; if (error) fallo(error);
     // La firma no viaja en la lista: tiene_firma solo indica si existe
-    return { user: { usuario: p.usuario, nombre: p.nombre, rol: p.rol, admin }, flota, checks: ch.map(r => checkDeDb(r, porId)), usuarios, planilla: "" };
+    return { user: userDePerfil(p), flota, checks: ch.map(r => checkDeDb(r, porId)), usuarios, planilla: "" };
   },
   async guardarCheck(reg, firma) {
     const fila = { patente: reg.patente, conductor: reg.conductor, sap: reg.sap || "", km: reg.km, km_mant: reg.kmMant, combustible: reg.combustible,
@@ -360,7 +388,7 @@ const SERVER = {
   },
   async eliminarVehiculo(pat) {
     const { error } = await sb.from("vehiculos").delete().eq("patente", normPat(pat));
-    if (error) throw new Error(/foreign key/i.test(error.message) ? "Esta camioneta tiene checks registrados; no se puede eliminar." : error.message);
+    if (error) fallo(error);
     return ensureFlota();
   },
   async guardarUsuario(u, esNuevo) {
@@ -371,7 +399,7 @@ const SERVER = {
   }
 };
 function llamar(fn, ...args) {
-  if (fn !== "login") args = args.slice(1); // el primer argumento era el token de Apps Script
+  if (!["login","registrar","recuperar","nuevaClave"].includes(fn)) args = args.slice(1); // el primer argumento era el token de Apps Script
   return SERVER[fn](...args).catch(e => {
     const msg = (e && e.message) || String(e);
     if (/SESION|JWT|expired/i.test(msg)) { cerrarSesion(true); throw new Error("Tu sesión expiró. Vuelve a ingresar."); }
@@ -497,7 +525,7 @@ function render() {
 // ---------- Vista conductor: Check list ----------
 function nuevoDraft() {
   return { patente: lsGet("msmin.patente") || "", km: "", kmMant: "", combustible: "", conductor: lsGet("msmin.conductor") || (S.user && S.user.nombre) || "",
-    sap: lsGet("msmin.sap") || "", items: {}, fatiga: {}, extintorVence: "", obs: "", firma: null };
+    sap: lsGet("msmin.sap") || (S.user && S.user.sap) || "", items: {}, fatiga: {}, extintorVence: "", obs: "", firma: null };
 }
 const alertaFatiga = f => FATIGA.some(([id, , seguro]) => f && f[id] && f[id] !== seguro);
 function renderCheck() {
@@ -511,7 +539,7 @@ function renderCheck() {
       ${malos.length ? `<h3 style="margin:16px 0 8px">Ítems reportados con problema (${malos.length})</h3>
         <div class="chk-list">${malos.map(([k, s]) => `<div><span>${esc(ITEM_NAME[k])}</span>${chip("crit", ESTADO_TXT[s])}</div>`).join("")}</div>
         <p class="small muted">Avisa a tu supervisor si alguno de estos ítems impide operar en faena.</p>` : `<p>Todos los ítems quedaron en Bueno o N/A.</p>`}
-      <div class="form-foot"><button class="btn primary" data-act="nuevo-check">Hacer otro check</button></div>
+      <div class="form-foot"><button class="btn" data-act="pdf-enviado">Descargar PDF</button><button class="btn primary" data-act="nuevo-check">Hacer otro check</button></div>
     </div>${renderMisChecks()}</section>`;
   }
   const total = ALL_ITEMS.length + FATIGA.length;
@@ -596,7 +624,7 @@ function renderMisChecks() {
   const mine = misChecks(); if (!mine.length) return "";
   return `<div class="panel"><div class="panel-h"><h2>Mis últimos checks</h2></div><div class="recent">
     ${mine.slice(0, 8).map(r => { const m = nFallas(r);
-      return `<div class="rc">${plate(r.patente)}<span class="num">${esc(fmtDT(r.fecha))} · ${nf(r.km)} km</span>${m ? chip("crit", m + " con problema") : chip("ok", "Todo bueno")}</div>`; }).join("")}
+      return `<div class="rc rc-pdf">${plate(r.patente)}<span class="num">${esc(fmtDT(r.fecha))} · ${nf(r.km)} km</span>${m ? chip("crit", m + " con problema") : chip("ok", "Todo bueno")}<button class="btn small" data-act="pdf" data-id="${esc(r.id)}" aria-label="Descargar PDF del check">PDF</button></div>`; }).join("")}
   </div></div>`;
 }
 async function enviarCheck() {
@@ -623,13 +651,123 @@ async function enviarCheck() {
     const guardado = await api("guardarCheck", reg, d.firma);
     S.checks = [guardado, ...S.checks];
     if (S.flota[guardado.patente] && guardado.km > (S.flota[guardado.patente].kmActual || 0)) S.flota[guardado.patente].kmActual = guardado.km;
-    reg.fecha = guardado.fecha;
+    reg.fecha = guardado.fecha; reg.id = guardado.id; FIRMAS[guardado.id] = d.firma;
     lsSet("msmin.patente", d.patente); lsSet("msmin.conductor", d.conductor); lsSet("msmin.sap", d.sap);
     S.sent = reg; S.draft = null; render(); window.scrollTo(0, 0);
   } catch (e) {
     btn.disabled = false; btn.textContent = "Enviar check";
     const f = $("#formErr"); if (f) f.innerHTML = `<div class="notice err">No se pudo guardar el check: ${esc(e.message)}. Revisa tu conexión e inténtalo de nuevo.</div>`;
   }
+}
+
+// PDF del check (respaldo del conductor): réplica de la hoja "Check list diario"
+let pdfLib = null;
+function cargarJsPDF() {
+  if (window.jspdf) return Promise.resolve(window.jspdf);
+  return pdfLib ||= new Promise((ok, err) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+    s.onload = () => ok(window.jspdf); s.onerror = () => { pdfLib = null; err(new Error("No se pudo cargar el generador de PDF")); };
+    document.head.appendChild(s);
+  });
+}
+async function descargarPDF(r) {
+  if (!r) return;
+  let lib;
+  try { toast("Preparando PDF…"); lib = await cargarJsPDF(); } catch { toast("No se pudo cargar el generador de PDF. Revisa tu conexión."); return; }
+  let firma = r.firmaData || null;
+  if (!firma && r.firma && r.id) { try { if (!(r.id in FIRMAS)) FIRMAS[r.id] = await api("getFirma", r.id); firma = FIRMAS[r.id]; } catch {} }
+  const doc = new lib.jsPDF({ unit: "mm", format: "a4" });
+  const AZ = [31, 63, 149], NA = [232, 87, 30], GR = [107, 114, 128], LN = [217, 222, 232];
+  const COL = { ok: [30, 123, 58], malo: [180, 35, 24], falta: [180, 35, 24], na: [107, 114, 128] };
+  const W = 210, M = 12;
+  const img = (sel, x, y, h, alinDer) => {
+    const el = document.querySelector(sel); if (!el || !el.src.startsWith("data:image/")) return;
+    const w = el.naturalHeight ? h * el.naturalWidth / el.naturalHeight : h * 2.5;
+    try { doc.addImage(el.src, /png/.test(el.src.slice(0, 20)) ? "PNG" : "JPEG", alinDer ? x - w : x, y, w, h); } catch {}
+  };
+  img(".logo-msmin img", M, 9, 13); img(".logo-cli img", W - M, 9, 13, true);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.setTextColor(...AZ); doc.text("CHECK LIST DIARIO", W / 2, 15, { align: "center" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...GR); doc.text("Camionetas · MSMIN by SGS", W / 2, 20, { align: "center" });
+  doc.setDrawColor(...NA); doc.setLineWidth(0.8); doc.line(M, 25, W - M, 25);
+
+  // Datos del encabezado
+  const v = S.flota[r.patente] || {};
+  const campos = [["Nombre conductor", r.conductor || "—"], ["SAP", r.sap || "—"], ["N° interno / Patente", `${v.interno ? v.interno + " / " : ""}${showPat(r.patente)}`],
+    ["Fecha", r.fecha ? new Date(r.fecha).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"],
+    ["KM act. / KM mant.", `${nf(r.km)} / ${r.kmMant ? nf(r.kmMant) : "—"}`], ["Nivel combustible", r.combustible != null && r.combustible !== "" ? r.combustible + " %" : "—"]];
+  let y = 29; const cw = (W - 2 * M) / 3;
+  doc.setLineWidth(0.2); doc.setDrawColor(...LN);
+  campos.forEach(([l, val], i) => {
+    const x = M + (i % 3) * cw, yy = y + Math.floor(i / 3) * 11;
+    doc.rect(x, yy, cw, 11);
+    doc.setFontSize(7); doc.setTextColor(...GR); doc.text(l.toUpperCase(), x + 2, yy + 3.6);
+    doc.setFontSize(10); doc.setTextColor(20, 20, 20); doc.setFont("helvetica", "bold"); doc.text(doc.splitTextToSize(String(val), cw - 4)[0], x + 2, yy + 8.6); doc.setFont("helvetica", "normal");
+  });
+  y += 26;
+
+  // Secciones en dos columnas, con columnas B / M / N/A como la hoja en papel
+  const colW = (W - 2 * M - 6) / 2, rh = 4.7;
+  const seccion = (sec, x, yy) => {
+    doc.setFillColor(...AZ); doc.rect(x, yy, colW, 6, "F");
+    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.text(sec.nombre.toUpperCase(), x + 2, yy + 4.2);
+    const cx = [x + colW - 25, x + colW - 16.5, x + colW - 8];
+    ["B", "M", "N/A"].forEach((t, i) => doc.text(t, cx[i] + 4, yy + 4.2, { align: "center" }));
+    yy += 6; doc.setFont("helvetica", "normal");
+    sec.items.forEach(([k, nombre, tipo], n) => {
+      if (n % 2) { doc.setFillColor(244, 246, 251); doc.rect(x, yy, colW, rh, "F"); }
+      doc.setFontSize(8); doc.setTextColor(30, 30, 30); doc.text(doc.splitTextToSize(nombre, colW - 30)[0], x + 2, yy + 3.3);
+      const s = r.items && r.items[k], idx = s === "ok" ? 0 : s === "malo" ? 1 : s === "na" || s === "falta" ? 2 : -1;
+      cx.forEach((c, i) => { doc.setDrawColor(...LN); doc.rect(c + 1.5, yy + 0.6, 5, rh - 1.2); });
+      if (idx >= 0) {
+        doc.setTextColor(...COL[s]); doc.setFont("helvetica", "bold");
+        doc.text(s === "falta" ? "F" : "X", cx[idx] + 4, yy + 3.4, { align: "center" }); doc.setFont("helvetica", "normal");
+      }
+      yy += rh;
+    });
+    doc.setDrawColor(...LN); doc.line(x, yy, x + colW, yy);
+    return yy + 3;
+  };
+  const izq = SECCIONES.filter(s => s.id === "general"), der = SECCIONES.filter(s => s.id !== "general");
+  let yl = y, yr = y;
+  izq.forEach(s => yl = seccion(s, M, yl)); der.forEach(s => yr = seccion(s, M + colW + 6, yr));
+  y = Math.max(yl, yr) + 1;
+
+  // Encuesta de fatiga
+  doc.setFillColor(...NA); doc.rect(M, y, W - 2 * M, 6, "F");
+  doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
+  doc.text("ENCUESTA DE FATIGA Y SOMNOLENCIA", M + 2, y + 4.2); doc.text("SÍ", W - M - 17, y + 4.2, { align: "center" }); doc.text("NO", W - M - 7, y + 4.2, { align: "center" });
+  y += 6; doc.setFont("helvetica", "normal");
+  FATIGA.forEach(([id, q, seguro], n) => {
+    const lineas = doc.splitTextToSize(q, W - 2 * M - 30), h = Math.max(5, lineas.length * 3.4 + 1.6);
+    if (n % 2) { doc.setFillColor(244, 246, 251); doc.rect(M, y, W - 2 * M, h, "F"); }
+    doc.setFontSize(7.8); doc.setTextColor(30, 30, 30); doc.text(lineas, M + 2, y + 3.4);
+    const a = r.fatiga && r.fatiga[id];
+    [["si", W - M - 17], ["no", W - M - 7]].forEach(([op, cx]) => {
+      doc.setDrawColor(...LN); doc.rect(cx - 2.5, y + h / 2 - 2, 5, 4);
+      if (a === op) { doc.setTextColor(...(a === seguro ? COL.ok : COL.malo)); doc.setFont("helvetica", "bold"); doc.text("X", cx, y + h / 2 + 1.1, { align: "center" }); doc.setFont("helvetica", "normal"); }
+    });
+    y += h;
+  });
+  if (r.fatigaAlerta) { y += 2; doc.setTextColor(...COL.malo); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.text("Atención: el conductor marcó una respuesta de riesgo en la encuesta de fatiga.", M, y + 3); doc.setFont("helvetica", "normal"); y += 4; }
+  y += 4;
+
+  // Observaciones y firma
+  const obsW = W - 2 * M - 66;
+  doc.setDrawColor(...LN); doc.rect(M, y, obsW, 30); doc.rect(M + obsW + 4, y, 62, 30);
+  doc.setFontSize(7); doc.setTextColor(...GR); doc.text("OBSERVACIONES", M + 2, y + 4); doc.text("FIRMA CONDUCTOR", M + obsW + 6, y + 4);
+  doc.setFontSize(8.5); doc.setTextColor(30, 30, 30); doc.text(doc.splitTextToSize(r.obs || "Sin observaciones.", obsW - 4).slice(0, 6), M + 2, y + 9);
+  if (firma) { try { doc.addImage(firma, "PNG", M + obsW + 8, y + 6, 54, 22); } catch {} }
+  y += 36;
+  const malos = Object.entries(r.items || {}).filter(([, s]) => esFalla(s));
+  doc.setFontSize(8); doc.setTextColor(...(malos.length ? COL.malo : COL.ok)); doc.setFont("helvetica", "bold");
+  doc.text(malos.length ? `${malos.length} ítem(s) con problema: ` : "Todos los ítems en Bueno o N/A.", M, y);
+  if (malos.length) { doc.setFont("helvetica", "normal"); doc.text(doc.splitTextToSize(malos.map(([k, s]) => `${ITEM_NAME[k]} (${ESTADO_TXT[s]})`).join(", "), W - 2 * M - 40).slice(0, 3), M + 40, y); }
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...GR);
+  doc.text("B = Bueno · M = Malo · N/A = No aplica · F = Falta (equipo obligatorio)", W / 2, 285, { align: "center" });
+  doc.text(`Registro ${r.id || ""} · generado el ${new Date().toLocaleString("es-CL")} · Flota MSMIN`, W / 2, 289, { align: "center" });
+  const f = (r.fecha || new Date().toISOString()).slice(0, 10);
+  doc.save(`check-${showPat(r.patente)}-${f}.pdf`);
 }
 
 // ---------- Vista admin: Panel ----------
@@ -758,7 +896,7 @@ function renderOverlay() {
       <div><small>Revisión técnica</small><b>${esc(fmtD(r.rtFecha))}</b></div>
       <div><small>Extintor</small><b>${esc(fmtD(r.extFecha))}</b></div>
     </div>
-    <h3>Último check ${u ? `· ${esc(fmtDT(u.fecha))} · ${esc(u.conductor)}` : ""}</h3>
+    <div class="panel-h" style="margin:0"><h3>Último check ${u ? `· ${esc(fmtDT(u.fecha))} · ${esc(u.conductor)}` : ""}</h3>${u ? `<button class="btn small" data-act="pdf" data-id="${esc(u.id)}">Descargar PDF</button>` : ""}</div>
     ${u ? `<div class="kv">
         <div><small>Conductor</small><b>${esc(u.conductor)}${u.sap ? ` <span class="muted small">SAP ${esc(u.sap)}</span>` : ""}</b></div>
         <div><small>Combustible</small><b class="num">${u.combustible != null ? u.combustible + " %" : "—"}</b></div>
@@ -997,26 +1135,83 @@ async function importar() {
 }
 // ---------- Login, clave y usuarios ----------
 function renderLogin() {
+  const m = S.authModo || "login", aviso = S.authAviso ? `<div class="notice ${S.authAviso.err ? "err" : "good"}">${esc(S.authAviso.txt)}</div>` : "";
+  const link = (modo, txt) => `<button type="button" class="linkbtn" data-auth="${modo}">${txt}</button>`;
+  if (m === "registro") return `<section class="login"><form id="loginForm" class="panel" novalidate>
+    <h2>Crear cuenta</h2>
+    <p class="small muted" style="margin:0">Regístrate para hacer el check list diario de tu camioneta.</p>
+    ${aviso}
+    <label class="f">Nombre y apellido<input id="r-nombre" autocomplete="name" placeholder="Ej: Pedro Tabilo"></label>
+    <label class="f">RUT<input id="r-rut" autocapitalize="characters" placeholder="Ej: 12345678-9"></label>
+    <label class="f">SAP<input id="r-sap" inputmode="numeric" placeholder="Opcional"></label>
+    <label class="f">Correo<input id="r-email" type="email" autocomplete="email" autocapitalize="none" placeholder="nombre@correo.cl"></label>
+    <label class="f">Clave<input id="r-pass" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></label>
+    <label class="f">Repite la clave<input id="r-pass2" type="password" autocomplete="new-password"></label>
+    <div id="loginErr"></div>
+    <button class="btn primary" type="submit">Crear cuenta</button>
+    <p class="small muted" style="margin:0">¿Ya tienes cuenta? ${link("login", "Ingresar")}</p>
+  </form></section>`;
+  if (m === "olvido") return `<section class="login"><form id="loginForm" class="panel" novalidate>
+    <h2>Recuperar clave</h2>
+    <p class="small muted" style="margin:0">Escribe el correo de tu cuenta y te enviaremos un enlace para crear una clave nueva.</p>
+    ${aviso}
+    <label class="f">Correo<input id="o-email" type="email" autocomplete="email" autocapitalize="none" placeholder="nombre@correo.cl"></label>
+    <div id="loginErr"></div>
+    <button class="btn primary" type="submit">Enviar enlace</button>
+    <p class="small muted" style="margin:0">${link("login", "Volver a ingresar")}</p>
+  </form></section>`;
+  if (m === "nueva") return `<section class="login"><form id="loginForm" class="panel" novalidate>
+    <h2>Crea tu nueva clave</h2>
+    ${aviso}
+    <label class="f">Nueva clave<input id="n-pass" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></label>
+    <label class="f">Repite la nueva clave<input id="n-pass2" type="password" autocomplete="new-password"></label>
+    <div id="loginErr"></div>
+    <button class="btn primary" type="submit">Guardar y entrar</button>
+  </form></section>`;
   return `<section class="login"><form id="loginForm" class="panel" novalidate>
     <h2>Ingresar</h2>
     <p class="small muted" style="margin:0">Check list diario de camionetas MSMIN.</p>
-    <label class="f">Usuario<input id="l-user" autocomplete="username" autocapitalize="none" placeholder="Usuario o RUT sin puntos"></label>
+    ${aviso}
+    <label class="f">Correo<input id="l-user" autocomplete="username" autocapitalize="none" placeholder="nombre@correo.cl"></label>
     <label class="f">Clave<input id="l-pass" type="password" autocomplete="current-password"></label>
     <div id="loginErr"></div>
     <button class="btn primary" type="submit">Ingresar</button>
-    <p class="small muted" style="margin:0">¿Olvidaste tu clave? Pídele a un administrador que te asigne una nueva.</p>
+    <p class="small muted" style="margin:0;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">${link("olvido", "¿Olvidaste tu clave?")}${link("registro", "Crear cuenta")}</p>
   </form></section>`;
 }
+const correoOk = e => /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(e);
 async function ingresar() {
-  const u = $("#l-user").value.trim(), p = $("#l-pass").value;
-  const err = $("#loginErr"), btn = $("#loginForm button[type=submit]");
-  if (!u || !p) { err.innerHTML = `<div class="notice err">Escribe tu usuario y tu clave.</div>`; return; }
-  btn.disabled = true; btn.textContent = "Ingresando…";
-  try {
-    const r = await llamar("login", u, p);
-    S.token = r.token; S.user = r.user; S.admin = !!r.user.admin; lsSet("msmin.token", r.token);
-    elegirTab(); render(); await cargar();
-  } catch (e) { btn.disabled = false; btn.textContent = "Ingresar"; err.innerHTML = `<div class="notice err">${esc(e.message)}</div>`; }
+  const m = S.authModo || "login", err = $("#loginErr"), btn = $("#loginForm button[type=submit]"), txt = btn.textContent;
+  const fallo = msg => { err.innerHTML = `<div class="notice err">${esc(msg)}</div>`; };
+  const entrar = r => { S.authModo = "login"; S.authAviso = null; S.token = r.token; S.user = r.user; S.admin = !!r.user.admin; elegirTab(); render(); return cargar(); };
+  let tarea;
+  if (m === "registro") {
+    const r = { nombre: $("#r-nombre").value.trim(), rut: $("#r-rut").value.trim().toUpperCase().replace(/\./g, ""), sap: $("#r-sap").value.trim(), email: $("#r-email").value.trim().toLowerCase(), clave: $("#r-pass").value };
+    if (!r.nombre) return fallo("Escribe tu nombre y apellido.");
+    if (!/^\d{7,8}-[\dK]$/.test(r.rut)) return fallo("Escribe tu RUT con guion, sin puntos. Ej: 12345678-9");
+    if (!correoOk(r.email)) return fallo("Escribe un correo válido.");
+    if (r.clave.length < 6) return fallo("La clave debe tener al menos 6 caracteres.");
+    if (r.clave !== $("#r-pass2").value) return fallo("Las claves no coinciden.");
+    tarea = async () => { const x = await llamar("registrar", r);
+      if (x.confirmar) { S.authModo = "login"; S.authAviso = { txt: `Te enviamos un correo a ${r.email}. Ábrelo para activar tu cuenta y luego ingresa.` }; render(); return; }
+      lsSet("msmin.conductor", r.nombre); if (r.sap) lsSet("msmin.sap", r.sap); await entrar(x); toast("Cuenta creada. ¡Bienvenido!"); };
+  } else if (m === "olvido") {
+    const email = $("#o-email").value.trim().toLowerCase();
+    if (!correoOk(email)) return fallo("Escribe el correo de tu cuenta.");
+    tarea = async () => { await llamar("recuperar", email); S.authModo = "login";
+      S.authAviso = { txt: `Si ${email} tiene cuenta, te llegará un correo con un enlace para crear tu nueva clave. Revisa también la carpeta de spam.` }; render(); };
+  } else if (m === "nueva") {
+    const n = $("#n-pass").value;
+    if (n.length < 6) return fallo("La clave debe tener al menos 6 caracteres.");
+    if (n !== $("#n-pass2").value) return fallo("Las claves no coinciden.");
+    tarea = async () => { await entrar(await llamar("nuevaClave", n)); toast("Clave actualizada"); };
+  } else {
+    const u = $("#l-user").value.trim(), p = $("#l-pass").value;
+    if (!u || !p) return fallo("Escribe tu correo y tu clave.");
+    tarea = async () => entrar(await llamar("login", u, p));
+  }
+  btn.disabled = true; btn.textContent = "Un momento…";
+  try { await tarea(); } catch (e) { btn.disabled = false; btn.textContent = txt; fallo(e.message); }
 }
 function cerrarSesion(expirada) {
   if (S.token && !expirada) llamar("logout", S.token).catch(() => {});
@@ -1049,13 +1244,14 @@ function renderUsuarios() {
   return `<section class="view"><div class="two">
   <div class="panel"><div class="panel-h"><h2>Usuarios</h2><span class="small muted">${S.usuarios.filter(u => u.activo).length} activos</span></div>
     <div class="veh-list">${lista.map(u => `<div class="veh"><span class="chip c-${u.activo ? (u.rol === "admin" ? "warn" : "ok") : "none"}">${u.rol === "admin" ? "Admin" : "Conductor"}</span>
-      <span><b>${esc(u.nombre)}</b>${u.activo ? "" : ` <span class="small muted">(desactivado)</span>`}<br><span class="small muted">${esc(u.usuario)} · ${u.ultimo ? "último ingreso " + esc(fmtDT(u.ultimo)) : "nunca ha ingresado"}</span></span>
+      <span><b>${esc(u.nombre)}</b>${u.activo ? "" : ` <span class="small muted">(desactivado)</span>`}<br><span class="small muted">${esc(u.usuario)}${u.rut ? " · RUT " + esc(u.rut) : ""} · ${u.ultimo ? "último ingreso " + esc(fmtDT(u.ultimo)) : "nunca ha ingresado"}</span></span>
       <button class="btn small" data-act="editar-user" data-u="${esc(u.usuario)}">Editar</button></div>`).join("")}</div>
   </div>
   <div class="panel"><div class="panel-h"><h2>${S.editUser ? "Editar " + esc(e.nombre || S.editUser) : "Crear usuario"}</h2>${S.editUser ? `<button class="btn ghost small" data-act="nuevo-user">Nuevo</button>` : ""}</div>
     <form id="userForm" class="grid-form" style="grid-template-columns:1fr" novalidate>
       <label class="f">Nombre y apellido<input id="u-nombre" value="${esc(e.nombre || "")}" placeholder="Ej: Pedro Tabilo"></label>
-      <label class="f">Usuario<input id="u-usuario" value="${esc(e.usuario || "")}" autocapitalize="none" placeholder="Ej: RUT sin puntos ni guion, 12345678k" ${S.editUser ? "readonly" : ""}></label>
+      <label class="f">Correo<input id="u-usuario" type="email" value="${esc(e.usuario || "")}" autocapitalize="none" placeholder="nombre@correo.cl (sirve para recuperar la clave)" ${S.editUser ? "readonly" : ""}></label>
+      <label class="f">RUT<input id="u-rut" value="${esc(e.rut || "")}" autocapitalize="characters" placeholder="Ej: 12345678-9"></label>
       <label class="f">SAP<input id="u-sap" value="${esc(e.sap || "")}" inputmode="numeric" placeholder="Opcional"></label>
       <label class="f">Rol<select id="u-rol"><option value="conductor" ${e.rol !== "admin" ? "selected" : ""}>Conductor: solo hace el check list</option><option value="admin" ${e.rol === "admin" ? "selected" : ""}>Administrador: ve el panel y gestiona todo</option></select></label>
       <label class="f">${S.editUser ? "Nueva clave (déjala vacía para no cambiarla)" : "Clave inicial"}<input id="u-clave" type="text" autocomplete="off" placeholder="Mínimo 6 caracteres"></label>
@@ -1063,11 +1259,11 @@ function renderUsuarios() {
       <div id="userErr"></div>
       <div class="form-foot" style="margin:0"><button class="btn primary" type="submit">${S.editUser ? "Guardar cambios" : "Crear usuario"}</button></div>
     </form>
-    <p class="small muted" style="margin:10px 0 0">Entrégale a la persona su usuario, su clave inicial y el enlace de la app. Después puede cambiar su clave desde el botón Clave.</p>
+    <p class="small muted" style="margin:10px 0 0">Los conductores también pueden crear su propia cuenta desde la pantalla de ingreso. Si alguien olvida su clave, puede pedir un enlace a su correo, o puedes asignarle una nueva aquí.</p>
   </div></div></section>`;
 }
 async function guardarUser() {
-  const u = { nombre: $("#u-nombre").value.trim(), usuario: $("#u-usuario").value.trim(), rol: $("#u-rol").value, sap: $("#u-sap").value.trim(), clave: $("#u-clave").value.trim(),
+  const u = { nombre: $("#u-nombre").value.trim(), usuario: $("#u-usuario").value.trim().toLowerCase(), rut: $("#u-rut").value.trim().toUpperCase().replace(/\./g, ""), rol: $("#u-rol").value, sap: $("#u-sap").value.trim(), clave: $("#u-clave").value.trim(),
     activo: $("#u-activo") ? $("#u-activo").checked : true };
   const btn = $("#userForm button[type=submit]"); btn.disabled = true;
   try { S.usuarios = await api("guardarUsuario", u, !S.editUser); toast(S.editUser ? "Usuario actualizado" : `Usuario ${u.usuario} creado`); S.editUser = null; render(); }
@@ -1086,8 +1282,9 @@ async function cargar(silencioso) {
 
 // ---------- Eventos ----------
 document.addEventListener("click", async ev => {
-  const t = ev.target.closest("[data-tab],[data-item],[data-fat],[data-act],[data-foco],[data-estado],[data-veh]");
+  const t = ev.target.closest("[data-tab],[data-item],[data-fat],[data-act],[data-foco],[data-estado],[data-veh],[data-auth]");
   if (!t) return;
+  if (t.dataset.auth) { S.authModo = t.dataset.auth; S.authAviso = null; render(); return; }
   if (t.dataset.tab) { S.tab = t.dataset.tab; lsSet("msmin.tab", S.tab); S.editUser = null; S.drawer = null; render(); window.scrollTo(0, 0); return; }
   if (t.dataset.item) {
     syncDraft(); S.draft.items[t.dataset.item] = t.dataset.val;
@@ -1111,6 +1308,8 @@ document.addEventListener("click", async ev => {
   else if (a === "refrescar") { await cargar(); toast("Datos actualizados"); }
   else if (a === "salir") cerrarSesion();
   else if (a === "csv") exportarExcel();
+  else if (a === "pdf-enviado") descargarPDF(S.sent && { ...S.sent, firmaData: FIRMAS[S.sent.id] });
+  else if (a === "pdf") descargarPDF(S.checks.find(c => c.id === t.dataset.id));
   else if (a === "mi-clave") { S.tab = "clave"; render(); }
   else if (a === "volver") { elegirTab(true); render(); }
   else if (a === "editar-user") { S.editUser = t.dataset.u; render(); window.scrollTo(0, 0); }
@@ -1171,7 +1370,20 @@ function softRender() {
   if (f && f !== "flt-q") { const el = document.getElementById(f); if (el && el.focus) el.focus(); }
 }
 function start() {
-  S.token = lsGet("msmin.auth") ? "sb" : null;
+  // Enlaces que llegan por correo (recuperar clave o confirmar cuenta)
+  const h = new URLSearchParams(location.hash.slice(1));
+  const vieneDeEnlace = h.has("access_token");
+  if (h.get("type") === "recovery") S.authModo = "nueva";
+  if (h.has("error_code") || h.has("error")) {
+    S.authModo = "olvido";
+    S.authAviso = { err: true, txt: /expired|invalid/i.test(h.get("error_code") + h.get("error_description")) ? "El enlace expiró o ya fue usado. Pide uno nuevo aquí." : (h.get("error_description") || "El enlace no es válido.") };
+    history.replaceState(null, "", URL_APP);
+  }
+  sb.auth.onAuthStateChange(ev => {
+    if (ev === "PASSWORD_RECOVERY") { S.authModo = "nueva"; S.token = null; render(); }
+    else if (ev === "SIGNED_IN" && vieneDeEnlace && !S.token && S.authModo !== "nueva") { S.token = "sb"; S.flotaReady = false; render(); cargar(); }
+  });
+  S.token = lsGet("msmin.auth") && S.authModo !== "nueva" ? "sb" : null;
   if (S.token) { S.flotaReady = false; render(); cargar(); } else render();
   // El panel se refresca solo cada 2 minutos para ver los checks nuevos
   setInterval(() => { if (S.admin && S.tab === "panel" && !S.drawer && document.visibilityState === "visible") cargar(true); }, 120000);

@@ -11,7 +11,11 @@ const cors = {
 };
 const resp = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
-const normUser = (u: unknown) => String(u ?? "").trim().toLowerCase().replace(/[.\s-]/g, "");
+const normUser = (u: unknown) => {
+  const t = String(u ?? "").trim().toLowerCase();
+  return t.includes("@") ? t : t.replace(/[.\s-]/g, "");
+};
+const esCorreo = (u: string) => /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(u);
 
 function claveServicio(): string {
   const legacy = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -42,18 +46,20 @@ Deno.serve(async (req) => {
     const nombre = String(b.nombre ?? "").trim();
     const rol = b.rol === "admin" ? "admin" : "conductor";
     const sap = String(b.sap ?? "").trim();
+    const rut = String(b.rut ?? "").trim().toUpperCase();
 
     if (b.accion === "crear") {
-      if (usuario.length < 3 || !/^[a-z0-9_]+$/.test(usuario)) return resp({ error: "El usuario debe tener al menos 3 letras o números, sin espacios (puede ser el RUT sin puntos ni guion)." }, 400);
+      if (!esCorreo(usuario) && (usuario.length < 3 || !/^[a-z0-9_]+$/.test(usuario))) return resp({ error: "Escribe un correo válido (sirve para recuperar la clave) o un usuario de al menos 3 letras o números." }, 400);
       if (!nombre) return resp({ error: "Escribe el nombre de la persona." }, 400);
       if (!b.clave || String(b.clave).length < 6) return resp({ error: "La clave debe tener al menos 6 caracteres." }, 400);
       const { data: ex } = await admin.from("perfiles").select("id").eq("usuario", usuario).maybeSingle();
       if (ex) return resp({ error: "Ese usuario ya existe." }, 400);
       const { data: nuevo, error: eNuevo } = await admin.auth.admin.createUser({
-        email: `${usuario}@${DOMINIO}`, password: String(b.clave), email_confirm: true, user_metadata: { nombre },
+        email: esCorreo(usuario) ? usuario : `${usuario}@${DOMINIO}`, password: String(b.clave), email_confirm: true, user_metadata: { nombre, sap, rut },
       });
       if (eNuevo) return resp({ error: eNuevo.message.includes("already") ? "Ese usuario ya existe." : eNuevo.message }, 400);
-      const { error: eP } = await admin.from("perfiles").insert({ id: nuevo.user.id, usuario, nombre, sap, rol, activo: true });
+      // Un trigger ya crea el perfil como conductor; aquí se completa con el rol elegido
+      const { error: eP } = await admin.from("perfiles").upsert({ id: nuevo.user.id, usuario, nombre, sap, rut, email: esCorreo(usuario) ? usuario : "", rol, activo: true });
       if (eP) { await admin.auth.admin.deleteUser(nuevo.user.id); return resp({ error: eP.message }, 400); }
     } else if (b.accion === "editar") {
       const { data: p } = await admin.from("perfiles").select("id").eq("usuario", usuario).maybeSingle();
@@ -70,11 +76,12 @@ Deno.serve(async (req) => {
       const upd: Record<string, unknown> = { rol, activo };
       if (nombre) upd.nombre = nombre;
       if (b.sap !== undefined) upd.sap = sap;
+      if (b.rut !== undefined) upd.rut = rut;
       await admin.from("perfiles").update(upd).eq("id", p.id);
     } else if (b.accion !== "listar") {
       return resp({ error: "Acción no válida." }, 400);
     }
-    const { data: lista } = await admin.from("perfiles").select("usuario,nombre,sap,rol,activo,ultimo_ingreso").order("nombre");
+    const { data: lista } = await admin.from("perfiles").select("usuario,nombre,sap,rut,email,rol,activo,ultimo_ingreso").order("nombre");
     return resp({ usuarios: lista ?? [] });
   } catch (e) {
     return resp({ error: String((e as Error).message ?? e) }, 500);
