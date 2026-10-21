@@ -125,7 +125,7 @@ textarea{resize:vertical;min-height:80px}
 .dash-h h1{font-size:2rem;line-height:1}
 .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .filters select,.filters input{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px}
-.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.kpis{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:4px;border-top:3px solid var(--none);cursor:pointer;text-align:left}
 .kpi:hover{border-color:var(--muted)}
 .kpi.k-crit{border-top-color:var(--crit)} .kpi.k-warn{border-top-color:var(--warn)} .kpi.k-ok{border-top-color:var(--ok)} .kpi.k-acc{border-top-color:var(--orange)}
@@ -198,7 +198,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-flex;align-items:center}
 .empty{padding:28px 16px;text-align:center;color:var(--muted)}
 .empty b{display:block;color:var(--fg);font-family:var(--f-display);font-size:1.3rem;margin-bottom:4px}
 
-@media (max-width:1100px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.row3{grid-template-columns:1fr 1fr}.row3>:first-child{grid-column:1/-1}}
+@media (max-width:1100px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.row3{grid-template-columns:1fr 1fr}.row3>:first-child{grid-column:1/-1}}
 @media (max-width:720px){
   .top{position:static} body::before{display:none}
   .top .wrap{gap:8px 12px;padding-block:8px}
@@ -207,7 +207,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-flex;align-items:center}
   .item,.item.fq{flex-direction:column;align-items:stretch;gap:8px}
   .seg{display:flex} .seg button{flex:1;padding:11px 6px;font-size:.9rem}
   .items{grid-template-columns:1fr}
-  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.row3,.two{grid-template-columns:1fr}.bar-r{grid-template-columns:110px 1fr 30px}.item{flex-wrap:wrap}.dash-h h1{font-size:1.6rem}}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis>:last-child{grid-column:1/-1}.row3,.two{grid-template-columns:1fr}.bar-r{grid-template-columns:110px 1fr 30px}.item{flex-wrap:wrap}.dash-h h1{font-size:1.6rem}}
 @media (prefers-reduced-motion:no-preference){.kpi,.btn,.tab{transition:border-color .15s,background .15s}}
 </style>
 </head>
@@ -287,9 +287,9 @@ const DOMINIO = "flota-msmin.app";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "msmin.auth" } });
 const normUser = u => String(u || "").trim().toLowerCase().replace(/[.\s-]/g, "");
 const vehDeDb = r => ({ patente: r.patente, interno: r.interno || "", marca: r.marca || "", modelo: r.modelo || "", anio: r.anio, faena: r.faena || "",
-  kmActual: r.km_actual, kmUltimaMant: r.km_ultima_mant, intervaloKm: r.intervalo_km || 10000, venceRevTec: r.vence_rev_tec, venceExtintor: r.vence_extintor });
+  kmActual: r.km_actual, kmUltimaMant: r.km_ultima_mant, intervaloKm: r.intervalo_km || 10000, venceRevTec: r.vence_rev_tec, venceExtintor: r.vence_extintor, vencePermiso: r.vence_permiso });
 const vehADb = v => ({ patente: normPat(v.patente), interno: v.interno || "", marca: v.marca || "", modelo: v.modelo || "", anio: v.anio || null, faena: v.faena || "",
-  km_actual: v.kmActual ?? null, km_ultima_mant: v.kmUltimaMant ?? null, intervalo_km: v.intervaloKm || 10000, vence_rev_tec: v.venceRevTec || null,
+  km_actual: v.kmActual ?? null, km_ultima_mant: v.kmUltimaMant ?? null, intervalo_km: v.intervaloKm || 10000, vence_rev_tec: v.venceRevTec || null, vence_permiso: v.vencePermiso || null,
   vence_extintor: v.venceExtintor || null, actualizado: new Date().toISOString() });
 const usuDeDb = u => ({ usuario: u.usuario, nombre: u.nombre, sap: u.sap || "", rut: u.rut || "", email: u.email || "", rol: u.rol, activo: u.activo, ultimo: u.ultimo_ingreso || "" });
 // Se entra con el correo; los usuarios antiguos sin correo siguen entrando con su nombre de usuario
@@ -445,6 +445,7 @@ function estadoVehiculo(v, regsPorPat) {
     return { cls: "ok", txt: `${d} d`, n: 0 };
   };
   res.rt = fechaEst(dias(v.venceRevTec), "Revisión técnica"); res.rtFecha = v.venceRevTec;
+  res.pc = fechaEst(dias(v.vencePermiso), "Permiso de circulación"); res.pcFecha = v.vencePermiso;
   const extF = (ult && ult.extintorVence) || v.venceExtintor;
   res.ext = fechaEst(dias(extF), "Extintor"); res.extFecha = extF;
 
@@ -485,7 +486,7 @@ function estadoVehiculo(v, regsPorPat) {
   res.otros = otrosMalos;
   const edad = ult ? Math.floor((Date.now() - new Date(ult.fecha)) / 864e5) : null;
   res.chk = !ult ? { cls: "warn", txt: "Nunca", n: 1 } : edad > CHECK_VIEJO_DIAS ? { cls: "warn", txt: `Hace ${edad} d`, n: 1 } : { cls: "ok", txt: edad === 0 ? "Hoy" : `Hace ${edad} d`, n: 0 };
-  const peor = Math.max(res.rt.n, res.ext.n, res.mant.n, res.baliza.n, res.pertiga.n, res.repuesto.n, res.luces.n, otrosMalos.length ? 1 : 0);
+  const peor = Math.max(res.rt.n, res.pc.n, res.ext.n, res.mant.n, res.baliza.n, res.pertiga.n, res.repuesto.n, res.luces.n, otrosMalos.length ? 1 : 0);
   res.global = peor === 2 ? "crit" : peor === 1 ? "warn" : "ok";
   return res;
 }
@@ -780,7 +781,7 @@ function renderPanel() {
   const base = lista.filter(r => (!F.faena || r.v.faena === F.faena) && (!F.q || normPat(r.v.patente).includes(normPat(F.q)) || (r.v.modelo || "").toLowerCase().includes(F.q.toLowerCase())));
   const cnt = (k, n) => base.filter(r => r[k].n === n).length;
   const k = {
-    rt: [cnt("rt", 2), cnt("rt", 1)], ext: [cnt("ext", 2), cnt("ext", 1)], mant: [cnt("mant", 2), cnt("mant", 1)],
+    rt: [cnt("rt", 2), cnt("rt", 1)], pc: [cnt("pc", 2), cnt("pc", 1)], ext: [cnt("ext", 2), cnt("ext", 1)], mant: [cnt("mant", 2), cnt("mant", 1)],
     bp: base.filter(r => r.baliza.n === 2 || r.pertiga.n === 2).length,
     luz: base.filter(r => r.luces.n === 2).length, rep: base.filter(r => r.repuesto.n === 2).length,
     ok: base.filter(r => r.global === "ok").length, warn: base.filter(r => r.global === "warn").length, crit: base.filter(r => r.global === "crit").length,
@@ -788,7 +789,7 @@ function renderPanel() {
     fat: base.filter(r => r.ult && r.ult.fatigaAlerta && Date.now() - new Date(r.ult.fecha) < 7 * 864e5).length
   };
   const focos = {
-    rt: r => r.rt.n > 0, ext: r => r.ext.n > 0, mant: r => r.mant.n > 0, bp: r => r.baliza.n === 2 || r.pertiga.n === 2,
+    rt: r => r.rt.n > 0, pc: r => r.pc.n > 0, ext: r => r.ext.n > 0, mant: r => r.mant.n > 0, bp: r => r.baliza.n === 2 || r.pertiga.n === 2,
     baliza: r => r.baliza.n === 2, pertiga: r => r.pertiga.n === 2, luces: r => r.luces.n === 2, repuesto: r => r.repuesto.n === 2,
     lr: r => r.luces.n === 2 || r.repuesto.n === 2, chk: r => r.chk.n === 1,
     fat: r => r.ult && r.ult.fatigaAlerta && Date.now() - new Date(r.ult.fecha) < 7 * 864e5
@@ -802,11 +803,12 @@ function renderPanel() {
   const tot = base.length || 1;
   const kpi = (id, l, v, sub, cls) => `<button class="kpi k-${cls}" data-foco="${id}" aria-pressed="${F.foco === id}"><span class="k-l">${l}</span><span class="k-v">${v}</span><span class="k-s">${sub}</span></button>`;
   const faltRows = [["baliza","Sin baliza",base.filter(focos.baliza).length],["pertiga","Sin pértiga",base.filter(focos.pertiga).length],
-    ["luces","Luces malas",k.luz],["repuesto","Sin neumático repuesto",k.rep],["ext","Extintor vencido",k.ext[0]],["rt","Rev. técnica vencida",k.rt[0]],["mant","Mantención pasada",k.mant[0]]];
+    ["luces","Luces malas",k.luz],["repuesto","Sin neumático repuesto",k.rep],["ext","Extintor vencido",k.ext[0]],["rt","Rev. técnica vencida",k.rt[0]],["pc","Permiso circulación vencido",k.pc[0]],["mant","Mantención pasada",k.mant[0]]];
   const maxF = Math.max(1, ...faltRows.map(x => x[2]));
   const venc = [];
   for (const r of base) {
     const a = dias(r.rtFecha); if (a != null && a <= 60) venc.push({ d: a, p: r.v.patente, t: "Revisión técnica", f: r.rtFecha });
+    const c = dias(r.pcFecha); if (c != null && c <= 60) venc.push({ d: c, p: r.v.patente, t: "Permiso de circulación", f: r.pcFecha });
     const b = dias(r.extFecha); if (b != null && b <= 60) venc.push({ d: b, p: r.v.patente, t: "Extintor", f: r.extFecha });
     if (r.mant.rest != null && r.mant.rest <= 2000) venc.push({ d: null, km: r.mant.rest, p: r.v.patente, t: "Mantención", f: null });
   }
@@ -825,6 +827,7 @@ function renderPanel() {
   </div>
   <div class="kpis">
     ${kpi("rt","Revisión técnica", k.rt[0], `vencidas · <b>${k.rt[1]}</b> por vencer (${AVISO_DIAS} d)`, k.rt[0] ? "crit" : k.rt[1] ? "warn" : "ok")}
+    ${kpi("pc","Permiso de circulación", k.pc[0], `vencidos · <b>${k.pc[1]}</b> por vencer (${AVISO_DIAS} d)`, k.pc[0] ? "crit" : k.pc[1] ? "warn" : "ok")}
     ${kpi("mant","Mantención por km", k.mant[0], `pasadas · <b>${k.mant[1]}</b> a menos de ${nf(AVISO_KM)} km`, k.mant[0] ? "crit" : k.mant[1] ? "warn" : "ok")}
     ${kpi("ext","Extintores", k.ext[0], `vencidos · <b>${k.ext[1]}</b> por vencer (${AVISO_DIAS} d)`, k.ext[0] ? "crit" : k.ext[1] ? "warn" : "ok")}
     ${kpi("bp","Baliza o pértiga", k.bp, "camionetas con faltante o falla", k.bp ? "crit" : "ok")}
@@ -854,22 +857,23 @@ function renderPanel() {
   <div class="panel">
     <div class="panel-h"><h2>Detalle por camioneta</h2>
       <div class="filters">
-        ${F.foco ? `<button class="btn ghost small" data-foco="">Quitar filtro: ${esc({rt:"Rev. técnica",ext:"Extintores",mant:"Mantención",bp:"Baliza/pértiga",baliza:"Baliza",pertiga:"Pértiga",luces:"Luces",repuesto:"Repuesto",lr:"Luces/repuesto",chk:"Sin check",fat:"Fatiga"}[F.foco])} ✕</button>` : ""}
+        ${F.foco ? `<button class="btn ghost small" data-foco="">Quitar filtro: ${esc({rt:"Rev. técnica",pc:"Permiso circulación",ext:"Extintores",mant:"Mantención",bp:"Baliza/pértiga",baliza:"Baliza",pertiga:"Pértiga",luces:"Luces",repuesto:"Repuesto",lr:"Luces/repuesto",chk:"Sin check",fat:"Fatiga"}[F.foco])} ✕</button>` : ""}
         <span class="seg-f" role="group" aria-label="Estado">${[["todos","Todas"],["crit","Críticas"],["warn","Atención"],["ok","Operativas"]].map(([id, n]) => `<button data-estado="${id}" aria-pressed="${F.estado === id}">${n}</button>`).join("")}</span>
       </div></div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Patente</th><th>Vehículo</th><th>Estado</th><th>Rev. técnica</th><th>Mantención</th><th>Extintor</th><th>Baliza</th><th>Pértiga</th><th>Luces</th><th>Repuesto</th><th>Último check</th></tr></thead>
+      <thead><tr><th>Patente</th><th>Vehículo</th><th>Estado</th><th>Rev. técnica</th><th>Permiso circ.</th><th>Mantención</th><th>Extintor</th><th>Baliza</th><th>Pértiga</th><th>Luces</th><th>Repuesto</th><th>Último check</th></tr></thead>
       <tbody>${filas.length ? filas.map(r => `<tr data-veh="${esc(r.v.patente)}">
         <td>${plate(r.v.patente)}</td>
         <td><div class="cell2"><span>${r.v.interno ? esc(r.v.interno) + " · " : ""}${esc([r.v.marca, r.v.modelo].filter(Boolean).join(" ") || "—")}</span><small>${esc(r.v.faena || "")}${r.v.faena ? " · " : ""}<span class="num">${nf(r.km)} km</span></small></div></td>
         <td>${chip(r.global, { ok: "Operativa", warn: "Atención", crit: "Crítica" }[r.global])}</td>
         <td><div class="cell2">${chip(r.rt.cls, r.rt.txt)}<small>${r.rtFecha ? esc(fmtD(r.rtFecha)) : ""}</small></div></td>
+        <td><div class="cell2">${chip(r.pc.cls, r.pc.txt)}<small>${r.pcFecha ? esc(fmtD(r.pcFecha)) : ""}</small></div></td>
         <td><div class="cell2">${chip(r.mant.cls, r.mant.txt)}${r.mant.rest != null ? `<div class="kmbar"><div style="width:${r.mant.pct * 100}%;background:var(--${r.mant.cls})"></div></div><small class="num">próx. ${nf(r.mant.prox)} km</small>` : ""}</div></td>
         <td><div class="cell2">${chip(r.ext.cls, r.ext.txt)}<small>${r.extFecha ? esc(fmtD(r.extFecha)) : ""}</small></div></td>
         <td>${chip(r.baliza.cls, r.baliza.txt)}</td><td>${chip(r.pertiga.cls, r.pertiga.txt)}</td>
         <td>${chip(r.luces.cls, r.luces.txt)}</td><td>${chip(r.repuesto.cls, r.repuesto.txt)}</td>
         <td><div class="cell2">${chip(r.chk.cls, r.chk.txt)}<small>${r.ult ? esc(r.ult.conductor) : ""}${r.ult && r.ult.fatigaAlerta ? ` · <b style="color:var(--crit)">fatiga</b>` : ""}</small></div></td>
-      </tr>`).join("") : `<tr><td colspan="11" class="muted">Ninguna camioneta coincide con este filtro.</td></tr>`}</tbody>
+      </tr>`).join("") : `<tr><td colspan="12" class="muted">Ninguna camioneta coincide con este filtro.</td></tr>`}</tbody>
     </table></div>
   </div>
   <div class="panel"><div class="panel-h"><h2>Checks recientes</h2><span class="small muted">${todosRegistros().length} registros</span></div>
@@ -894,6 +898,7 @@ function renderOverlay() {
       <div><small>Kilometraje</small><b class="num">${nf(r.km)} km</b></div>
       <div><small>Próxima mantención</small><b class="num">${r.mant.prox ? nf(r.mant.prox) + " km" : "Sin dato"}</b></div>
       <div><small>Revisión técnica</small><b>${esc(fmtD(r.rtFecha))}</b></div>
+      <div><small>Permiso de circulación</small><b>${esc(fmtD(r.pcFecha))}</b></div>
       <div><small>Extintor</small><b>${esc(fmtD(r.extFecha))}</b></div>
     </div>
     <div class="panel-h" style="margin:0"><h3>Último check ${u ? `· ${esc(fmtDT(u.fecha))} · ${esc(u.conductor)}` : ""}</h3>${u ? `<button class="btn small" data-act="pdf" data-id="${esc(u.id)}">Descargar PDF</button>` : ""}</div>
@@ -1000,6 +1005,7 @@ async function exportarExcel() {
     { t: "Patente", w: 11, bold: true, al: "center" }, { t: "N° interno", w: 10, al: "center" }, { t: "Vehículo", w: 22 }, { t: "Faena", w: 14 },
     { t: "Km actual", w: 11, fmt: "#,##0", al: "right" }, { t: "Estado", w: 12, al: "center", naranjo: true },
     { t: "Vence rev. técnica", w: 13, fmt: "dd-mm-yyyy", al: "center" }, { t: "Rev. técnica", w: 16, al: "center" },
+    { t: "Vence permiso circulación", w: 13, fmt: "dd-mm-yyyy", al: "center" }, { t: "Permiso circulación", w: 16, al: "center" },
     { t: "Próx. mantención (km)", w: 13, fmt: "#,##0", al: "right" }, { t: "Mantención", w: 16, al: "center" },
     { t: "Vence extintor", w: 13, fmt: "dd-mm-yyyy", al: "center" }, { t: "Extintor", w: 16, al: "center" },
     { t: "Baliza", w: 10, al: "center" }, { t: "Pértiga", w: 10, al: "center" }, { t: "Luces", w: 10, al: "center" }, { t: "Neumático repuesto", w: 12, al: "center" },
@@ -1013,7 +1019,7 @@ async function exportarExcel() {
   // Resumen en bloques de color
   const cuenta = f => lista.filter(f).length;
   const resumen = [["Operativas", cuenta(r => r.global === "ok"), "ok"], ["Atención", cuenta(r => r.global === "warn"), "warn"], ["Críticas", cuenta(r => r.global === "crit"), "crit"],
-    ["Rev. técnica vencida", cuenta(r => r.rt.n === 2), "crit"], ["Extintor vencido", cuenta(r => r.ext.n === 2), "crit"], ["Mantención pasada", cuenta(r => r.mant.n === 2), "crit"],
+    ["Rev. técnica vencida", cuenta(r => r.rt.n === 2), "crit"], ["Permiso circ. vencido", cuenta(r => r.pc.n === 2), "crit"], ["Extintor vencido", cuenta(r => r.ext.n === 2), "crit"], ["Mantención pasada", cuenta(r => r.mant.n === 2), "crit"],
     ["Sin baliza / pértiga", cuenta(r => r.baliza.n === 2 || r.pertiga.n === 2), "crit"], ["Luces malas", cuenta(r => r.luces.n === 2), "crit"],
     ["Sin neum. repuesto", cuenta(r => r.repuesto.n === 2), "crit"], ["Sin check reciente", cuenta(r => r.chk.n === 1), "warn"]];
   ws.getRow(4).height = 6; ws.getRow(5).height = 16; ws.getRow(6).height = 26;
@@ -1033,7 +1039,7 @@ async function exportarExcel() {
     if (r.otros.length) prob.push(...r.otros.map(k => ITEM_NAME[k] + " (" + ESTADO_TXT[u.items[k]] + ")"));
     if (r.luces.malas && r.luces.malas.length) prob.push("Luces: " + r.luces.malas.map(k => ITEM_NAME[k]).join(", "));
     return [showPat(r.v.patente), r.v.interno || "", [r.v.marca, r.v.modelo, r.v.anio].filter(Boolean).join(" "), r.v.faena || "", r.km || null,
-      est(r.global, ESTADO[r.global]), xlFecha(r.rtFecha), est(r.rt.cls, r.rt.txt), r.mant.prox || null, est(r.mant.cls, r.mant.txt),
+      est(r.global, ESTADO[r.global]), xlFecha(r.rtFecha), est(r.rt.cls, r.rt.txt), xlFecha(r.pcFecha), est(r.pc.cls, r.pc.txt), r.mant.prox || null, est(r.mant.cls, r.mant.txt),
       xlFecha(r.extFecha), est(r.ext.cls, r.ext.txt), est(r.baliza.cls, r.baliza.txt), est(r.pertiga.cls, r.pertiga.txt), est(r.luces.cls, r.luces.txt), est(r.repuesto.cls, r.repuesto.txt),
       u ? xlFechaHora(u.fecha) : null, est(r.chk.cls, r.chk.txt), u ? u.conductor : "", u && u.combustible != null ? +u.combustible : null,
       u ? est(u.fatigaAlerta ? "crit" : "ok", u.fatigaAlerta ? "Riesgo" : "OK") : "", [...new Set(prob)].join(" · ")];
@@ -1067,7 +1073,7 @@ async function exportarExcel() {
 // ---------- Vista admin: Vehículos ----------
 const VCAMPOS = [["patente","Patente","text","ABCD12"],["interno","N° interno","text","Ej: C-15"],["marca","Marca","text","Toyota"],["modelo","Modelo","text","Hilux 4x4"],["anio","Año","number",""],
   ["faena","Faena / área","text","Ej: Centinela"],["kmActual","Km actual","number",""],["kmUltimaMant","Km última mantención","number",""],
-  ["intervaloKm","Intervalo mantención (km)","number","10000"],["venceRevTec","Vence revisión técnica","date",""],["venceExtintor","Vence extintor","date",""]];
+  ["intervaloKm","Intervalo mantención (km)","number","10000"],["venceRevTec","Vence revisión técnica","date",""],["vencePermiso","Vence permiso de circulación","date",""],["venceExtintor","Vence extintor","date",""]];
 function renderVehiculos() {
   const vehs = Object.values(S.flota).sort((a, b) => a.patente.localeCompare(b.patente));
   const e = S.editVeh ? S.flota[S.editVeh] || {} : {};
@@ -1089,7 +1095,7 @@ function renderVehiculos() {
       <p class="small muted" style="margin:10px 0 0">Al registrar una mantención, actualiza "Km última mantención" con el kilometraje en que se hizo.</p>
     </div>
     <div class="panel"><div class="panel-h"><h2>Carga masiva</h2></div>
-      <p class="small muted" style="margin-top:0">Pega una fila por camioneta, separada por punto y coma o tabulación (puedes copiar desde Excel):<br><code>patente; marca; modelo; faena; km actual; km última mantención; vence rev. técnica (AAAA-MM-DD); vence extintor (AAAA-MM-DD); n° interno</code></p>
+      <p class="small muted" style="margin-top:0">Pega una fila por camioneta, separada por punto y coma o tabulación (puedes copiar desde Excel):<br><code>patente; marca; modelo; faena; km actual; km última mantención; vence rev. técnica (AAAA-MM-DD); vence extintor (AAAA-MM-DD); n° interno; vence permiso circulación (AAAA-MM-DD)</code></p>
       <label class="f">Lista<textarea id="bulk" rows="5" placeholder="ABCD12; Toyota; Hilux; Centinela; 84250; 80000; 2027-03-31; 2027-01-15"></textarea></label>
       <div id="bulkMsg"></div>
       <div class="form-foot"><button class="btn" data-act="bulk">Importar</button></div>
@@ -1104,7 +1110,7 @@ async function guardarVeh() {
   if (!S.editVeh && S.flota[pat]) return err("Esa patente ya está en la flota. Usa Editar para cambiarla.");
   const num = k => g(k) === "" ? null : Math.round(+g(k));
   const doc = { patente: pat, interno: g("interno"), marca: g("marca"), modelo: g("modelo"), anio: num("anio"), faena: g("faena"), kmActual: num("kmActual"),
-    kmUltimaMant: num("kmUltimaMant"), intervaloKm: num("intervaloKm") || 10000, venceRevTec: g("venceRevTec") || null, venceExtintor: g("venceExtintor") || null };
+    kmUltimaMant: num("kmUltimaMant"), intervaloKm: num("intervaloKm") || 10000, venceRevTec: g("venceRevTec") || null, vencePermiso: g("vencePermiso") || null, venceExtintor: g("venceExtintor") || null };
   const btn = $("#vehForm button[type=submit]"); btn.disabled = true;
   try { S.flota = await api("guardarVehiculo", doc, !S.editVeh); toast(S.editVeh ? "Cambios guardados" : `${showPat(pat)} agregada a la flota`); S.editVeh = null; render(); }
   catch (e) { btn.disabled = false; err(`No se pudo guardar: ${e.message}`); }
@@ -1122,7 +1128,7 @@ async function importar() {
     const prev = S.flota[pat] || {};
     const doc = { ...prev, patente: pat, marca: c[1] || prev.marca || "", modelo: c[2] || prev.modelo || "", faena: c[3] || prev.faena || "",
       kmActual: n(c[4]) ?? prev.kmActual ?? null, kmUltimaMant: n(c[5]) ?? prev.kmUltimaMant ?? null, intervaloKm: prev.intervaloKm || 10000,
-      venceRevTec: fecha(c[6]) || prev.venceRevTec || null, venceExtintor: fecha(c[7]) || prev.venceExtintor || null, interno: c[8] || prev.interno || "", anio: prev.anio ?? null };
+      venceRevTec: fecha(c[6]) || prev.venceRevTec || null, venceExtintor: fecha(c[7]) || prev.venceExtintor || null, interno: c[8] || prev.interno || "", vencePermiso: fecha(c[9]) || prev.vencePermiso || null, anio: prev.anio ?? null };
     lista.push(doc);
   }
   if (lista.length) {

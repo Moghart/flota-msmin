@@ -26,3 +26,6 @@ end $$;
 revoke execute on function public.crear_perfil_nuevo_usuario() from public, anon, authenticated;
 drop trigger if exists trg_nuevo_usuario on auth.users;
 create trigger trg_nuevo_usuario after insert on auth.users for each row execute function public.crear_perfil_nuevo_usuario();
+
+-- 4) Vencimiento del permiso de circulación
+alter table public.vehiculos add column if not exists vence_permiso date;
