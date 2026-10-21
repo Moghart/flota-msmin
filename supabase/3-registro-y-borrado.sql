@@ -29,3 +29,20 @@ create trigger trg_nuevo_usuario after insert on auth.users for each row execute
 
 -- 4) Vencimiento del permiso de circulación
 alter table public.vehiculos add column if not exists vence_permiso date;
+
+-- 5) Fechas de vencimiento confirmadas por el conductor en cada check
+alter table public.checks add column if not exists rev_tec_vence date;
+alter table public.checks add column if not exists permiso_vence date;
+create or replace function public.check_actualiza_km()
+ returns trigger language plpgsql security definer set search_path to 'public' as $function$
+begin
+  update vehiculos set km_actual = new.km, actualizado = now()
+   where patente = new.patente and (km_actual is null or km_actual < new.km);
+  -- Las fechas que confirma el conductor quedan como las vigentes de la camioneta
+  update vehiculos set vence_rev_tec = coalesce(new.rev_tec_vence, vence_rev_tec),
+                       vence_permiso = coalesce(new.permiso_vence, vence_permiso),
+                       vence_extintor = coalesce(new.extintor_vence, vence_extintor),
+                       actualizado = now()
+   where patente = new.patente and (new.rev_tec_vence is not null or new.permiso_vence is not null or new.extintor_vence is not null);
+  return new;
+end $function$;

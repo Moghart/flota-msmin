@@ -100,7 +100,8 @@ textarea{resize:vertical;min-height:80px}
 .sec-h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
 .items{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:8px}
 .item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:6px;background:var(--surface-2);border:1px solid transparent}
-.item.need{border-color:var(--warn)}
+.item.need,input.need{border-color:var(--warn)}
+.f-vence{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .item .lbl{font-weight:600;min-width:0}
 .item .lbl small{display:block;font-weight:500;color:var(--muted);font-size:.75rem}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex-shrink:0}
@@ -241,7 +242,7 @@ const SECCIONES = [
     ["luz_alta","Luces altas","std"],["luz_baja","Luces bajas","std"],["luz_retroceso","Luces de retroceso","std"],
     ["int_del","Luces intermitentes delanteras","std"],["int_tras","Luces intermitentes traseras","std"],["luz_freno","Luces de freno","std"],
     ["vidrios","Estado vidrios","std"],["parabrisas","Estado parabrisas","std"],["neum_del","Neumáticos delanteros","std"],
-    ["neum_tras","Neumáticos traseros","std"],["presion","Presión de neumáticos","std"],["neumatico_repuesto","Neumáticos de repuesto (2)","req"],
+    ["neum_tras","Neumáticos traseros","std"],["presion","Presión de neumáticos","std"],["neumatico_repuesto","Neumático de repuesto","req"],
     ["cint_del","Cinturones delanteros","std"],["cint_tras","Cinturones traseros","std"],["aire","Aire acondicionado","std"],
     ["luz_interior","Luces interiores","std"],["espejos","Espejos retrovisores","std"],["freno_servicio","Freno de servicio","std"],
     ["freno_mano","Freno de mano","std"],["alarma_retroceso","Alarma de retroceso","std"],["limpiaparabrisas","Limpia parabrisas","std"],
@@ -298,11 +299,11 @@ const URL_APP = location.origin + location.pathname;
 const userDePerfil = p => ({ usuario: p.usuario, nombre: p.nombre, sap: p.sap || "", rut: p.rut || "", rol: p.rol, admin: p.rol === "admin" });
 const errAuth = m => /invalid/i.test(m) ? "Correo o clave incorrectos." : /banned/i.test(m) ? "Tu usuario está desactivado. Habla con un administrador."
   : /not confirmed/i.test(m) ? "Aún no confirmas tu correo. Revisa tu bandeja de entrada." : /rate limit|security purposes/i.test(m) ? "Demasiados intentos. Espera un minuto e inténtalo de nuevo." : m;
-const CHECK_COLS = "id,fecha,patente,usuario_id,conductor,sap,km,km_mant,combustible,items,fatiga,fatiga_alerta,extintor_vence,obs,tiene_firma";
+const CHECK_COLS = "id,fecha,patente,usuario_id,conductor,sap,km,km_mant,combustible,items,fatiga,fatiga_alerta,extintor_vence,rev_tec_vence,permiso_vence,obs,tiene_firma";
 function checkDeDb(r, usuarios) {
   return { id: r.id, fecha: r.fecha, patente: r.patente, km: r.km, kmMant: r.km_mant, combustible: r.combustible, conductor: r.conductor, sap: r.sap || "",
     usuario: (usuarios[r.usuario_id] || {}).usuario || (r.usuario_id === S._uid ? S.user && S.user.usuario : ""), fatigaAlerta: r.fatiga_alerta,
-    extintorVence: r.extintor_vence, obs: r.obs || "", firma: !!r.tiene_firma, items: r.items || {}, fatiga: r.fatiga || {} };
+    extintorVence: r.extintor_vence, revTecVence: r.rev_tec_vence, permisoVence: r.permiso_vence, obs: r.obs || "", firma: !!r.tiene_firma, items: r.items || {}, fatiga: r.fatiga || {} };
 }
 const fallo = e => { throw new Error((e && e.message) || String(e)); };
 async function miPerfil() {
@@ -371,7 +372,7 @@ const SERVER = {
   },
   async guardarCheck(reg, firma) {
     const fila = { patente: reg.patente, conductor: reg.conductor, sap: reg.sap || "", km: reg.km, km_mant: reg.kmMant, combustible: reg.combustible,
-      items: reg.items, fatiga: reg.fatiga, fatiga_alerta: !!reg.fatigaAlerta, extintor_vence: reg.extintorVence || null, obs: reg.obs || "", firma };
+      items: reg.items, fatiga: reg.fatiga, fatiga_alerta: !!reg.fatigaAlerta, extintor_vence: reg.extintorVence || null, rev_tec_vence: reg.revTecVence || null, permiso_vence: reg.permisoVence || null, obs: reg.obs || "", firma };
     const { data, error } = await sb.from("checks").insert(fila).select(CHECK_COLS).single(); if (error) fallo(error);
     return checkDeDb(data, {});
   },
@@ -446,7 +447,7 @@ function estadoVehiculo(v, regsPorPat) {
   };
   res.rt = fechaEst(dias(v.venceRevTec), "Revisión técnica"); res.rtFecha = v.venceRevTec;
   res.pc = fechaEst(dias(v.vencePermiso), "Permiso de circulación"); res.pcFecha = v.vencePermiso;
-  const extF = (ult && ult.extintorVence) || v.venceExtintor;
+  const extF = v.venceExtintor || (ult && ult.extintorVence);
   res.ext = fechaEst(dias(extF), "Extintor"); res.extFecha = extF;
 
   const intervalo = +v.intervaloKm || 10000;
@@ -526,7 +527,7 @@ function render() {
 // ---------- Vista conductor: Check list ----------
 function nuevoDraft() {
   return { patente: lsGet("msmin.patente") || "", km: "", kmMant: "", combustible: "", conductor: lsGet("msmin.conductor") || (S.user && S.user.nombre) || "",
-    sap: lsGet("msmin.sap") || (S.user && S.user.sap) || "", items: {}, fatiga: {}, extintorVence: "", obs: "", firma: null };
+    sap: lsGet("msmin.sap") || (S.user && S.user.sap) || "", items: {}, fatiga: {}, extintorVence: "", revTecVence: "", permisoVence: "", obs: "", firma: null };
 }
 const alertaFatiga = f => FATIGA.some(([id, , seguro]) => f && f[id] && f[id] !== seguro);
 function renderCheck() {
@@ -546,6 +547,10 @@ function renderCheck() {
   const total = ALL_ITEMS.length + FATIGA.length;
   const resp = ALL_ITEMS.filter(i => d.items[i[0]]).length + FATIGA.filter(q => d.fatiga[q[0]]).length;
   const v = S.flota[d.patente];
+  if (v && d._precarga !== d.patente) {
+    d._precarga = d.patente;
+    d.revTecVence = v.venceRevTec || ""; d.permisoVence = v.vencePermiso || ""; d.extintorVence = v.venceExtintor || "";
+  }
   const opts = tipo => tipo === "req" ? [["ok","Bueno"],["malo","Malo"],["falta","Falta"]] : [["ok","Bueno"],["malo","Malo"],["na","N/A"]];
   return `<section class="view">
   <div class="panel">
@@ -569,6 +574,14 @@ function renderCheck() {
         <label class="f">Nivel combustible (%)
           <input id="f-comb" type="number" inputmode="numeric" min="0" max="100" step="5" placeholder="0 a 100" value="${esc(d.combustible)}" required></label>
       </div>
+      <div class="sec">
+        <div class="sec-h"><h3>Vencimientos de la camioneta</h3></div>
+        <p class="small muted" style="margin:0 0 10px">Revisa los documentos y la etiqueta del extintor. Corrige la fecha si no coincide.</p>
+        <div class="grid-form">${[["f-rt","revTecVence","Revisión técnica"],["f-pc","permisoVence","Permiso de circulación"],["f-ext","extintorVence","Extintor (etiqueta)"]].map(([id, k, n]) => {
+          const dd = dias(d[k]), est = !d[k] ? "" : dd < 0 ? chip("crit", `Vencido hace ${-dd} d`) : dd <= AVISO_DIAS ? chip("warn", `Vence en ${dd} d`) : chip("ok", "Vigente");
+          return `<label class="f"><span class="f-vence">${n} ${est}</span><input id="${id}" type="date" class="${d._try && !d[k] ? "need" : ""}" value="${esc(d[k])}" required></label>`; }).join("")}</div>
+        ${[d.revTecVence, d.permisoVence, d.extintorVence].some(x => x && dias(x) < 0) ? `<div class="notice err" style="margin-top:10px">Hay un documento o el extintor vencido. Avisa a tu supervisor antes de salir.</div>` : ""}
+      </div>
       ${SECCIONES.map(sec => `<div class="sec">
         <div class="sec-h"><h3>${esc(sec.nombre)}</h3><button type="button" class="btn ghost small" data-act="todo-ok" data-sec="${sec.id}">Marcar todo Bueno</button></div>
         <div class="items">${sec.items.map(([k, n, tipo]) => `<div class="item ${d._try && !d.items[k] ? "need" : ""}">
@@ -576,7 +589,6 @@ function renderCheck() {
           <span class="seg" role="group" aria-label="${esc(n)}">
             ${opts(tipo).map(([s, t]) => `<button type="button" class="s-${s}" data-item="${k}" data-val="${s}" aria-pressed="${d.items[k] === s}">${t}</button>`).join("")}
           </span></div>`).join("")}</div>
-        ${sec.id === "kit" ? `<div class="grid-form" style="margin-top:10px"><label class="f">Vencimiento del extintor (etiqueta)<input id="f-ext" type="date" value="${esc(d.extintorVence)}"></label></div>` : ""}
       </div>`).join("")}
       <div class="sec">
         <div class="sec-h"><h3>Encuesta breve de fatiga y somnolencia</h3></div>
@@ -639,6 +651,7 @@ async function enviarCheck() {
   if (!d.km || +d.km <= 0) errs.push("ingresa el KM actual");
   if (d.combustible === "" || +d.combustible < 0 || +d.combustible > 100) errs.push("indica el nivel de combustible (0 a 100 %)");
   if (faltan) errs.push(`responde ${faltan} ítem${faltan > 1 ? "s" : ""} pendiente${faltan > 1 ? "s" : ""} (marcados en amarillo)`);
+  if (!d.revTecVence || !d.permisoVence || !d.extintorVence) errs.push("completa las fechas de vencimiento");
   if (!d.firma) errs.push("firma el check");
   const v = S.flota[d.patente];
   if (!errs.length && v && v.kmActual && +d.km < +v.kmActual) errs.push(`el KM actual es menor al último registrado (${nf(v.kmActual)} km); corrígelo`);
@@ -646,7 +659,7 @@ async function enviarCheck() {
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const reg = { id, patente: d.patente, km: Math.round(+d.km), kmMant: d.kmMant ? Math.round(+d.kmMant) : null, combustible: Math.round(+d.combustible),
     conductor: d.conductor, sap: d.sap, fecha: new Date().toISOString(), items: { ...d.items }, fatiga: { ...d.fatiga },
-    fatigaAlerta: alertaFatiga(d.fatiga), extintorVence: d.extintorVence || null, obs: d.obs || "", firma: true };
+    fatigaAlerta: alertaFatiga(d.fatiga), extintorVence: d.extintorVence || null, revTecVence: d.revTecVence || null, permisoVence: d.permisoVence || null, obs: d.obs || "", firma: true };
   const btn = $("#checkForm button[type=submit]"); btn.disabled = true; btn.textContent = "Enviando…";
   try {
     const guardado = await api("guardarCheck", reg, d.firma);
@@ -696,7 +709,8 @@ async function descargarPDF(r) {
   const v = S.flota[r.patente] || {};
   const campos = [["Nombre conductor", r.conductor || "—"], ["SAP", r.sap || "—"], ["N° interno / Patente", `${v.interno ? v.interno + " / " : ""}${showPat(r.patente)}`],
     ["Fecha", r.fecha ? new Date(r.fecha).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"],
-    ["KM act. / KM mant.", `${nf(r.km)} / ${r.kmMant ? nf(r.kmMant) : "—"}`], ["Nivel combustible", r.combustible != null && r.combustible !== "" ? r.combustible + " %" : "—"]];
+    ["KM act. / KM mant.", `${nf(r.km)} / ${r.kmMant ? nf(r.kmMant) : "—"}`], ["Nivel combustible", r.combustible != null && r.combustible !== "" ? r.combustible + " %" : "—"],
+    ["Vence revisión técnica", r.revTecVence ? fmtD(r.revTecVence) : "—"], ["Vence permiso circulación", r.permisoVence ? fmtD(r.permisoVence) : "—"], ["Vence extintor", r.extintorVence ? fmtD(r.extintorVence) : "—"]];
   let y = 29; const cw = (W - 2 * M) / 3;
   doc.setLineWidth(0.2); doc.setDrawColor(...LN);
   campos.forEach(([l, val], i) => {
@@ -705,7 +719,7 @@ async function descargarPDF(r) {
     doc.setFontSize(7); doc.setTextColor(...GR); doc.text(l.toUpperCase(), x + 2, yy + 3.6);
     doc.setFontSize(10); doc.setTextColor(20, 20, 20); doc.setFont("helvetica", "bold"); doc.text(doc.splitTextToSize(String(val), cw - 4)[0], x + 2, yy + 8.6); doc.setFont("helvetica", "normal");
   });
-  y += 26;
+  y += 37;
 
   // Secciones en dos columnas, con columnas B / M / N/A como la hoja en papel
   const colW = (W - 2 * M - 6) / 2, rh = 4.7;
@@ -1050,6 +1064,7 @@ async function exportarExcel() {
   const regs = todosRegistros().sort((a, b) => b.fecha.localeCompare(a.fecha));
   const C2 = [{ t: "Fecha", w: 16, fmt: "dd-mm-yyyy hh:mm", al: "center" }, { t: "Patente", w: 11, bold: true, al: "center" }, { t: "Conductor", w: 22 }, { t: "SAP", w: 10, al: "center" },
     { t: "Km", w: 11, fmt: "#,##0", al: "right" }, { t: "Km mant.", w: 11, fmt: "#,##0", al: "right" }, { t: "Combustible", w: 11, fmt: "0\" %\"", al: "center" },
+    { t: "Vence rev. técnica", w: 12, fmt: "dd-mm-yyyy", al: "center" }, { t: "Vence permiso", w: 12, fmt: "dd-mm-yyyy", al: "center" }, { t: "Vence extintor", w: 12, fmt: "dd-mm-yyyy", al: "center" },
     { t: "Fatiga", w: 9, al: "center" }, { t: "Resultado", w: 14, al: "center", naranjo: true }, { t: "Ítems con problema", w: 48, wrap: true }, { t: "Observaciones", w: 40, wrap: true }];
   const ws2 = wb.addWorksheet("Checks", { views: [{ state: "frozen", ySplit: 4, showGridLines: false }], pageSetup: { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
   xlEncabezado(ws2, C2.length, "Historial de check list diario", `${regs.length} registro${regs.length === 1 ? "" : "s"} · generado el ${fechaTxt}`);
@@ -1058,6 +1073,7 @@ async function exportarExcel() {
   xlFilas(ws2, 5, C2, regs.map(r => {
     const malos = Object.entries(r.items || {}).filter(([, s]) => esFalla(s));
     return [xlFechaHora(r.fecha), showPat(r.patente), r.conductor || "", r.sap || "", +r.km || null, +r.kmMant || null, r.combustible != null && r.combustible !== "" ? +r.combustible : null,
+      xlFecha(r.revTecVence), xlFecha(r.permisoVence), xlFecha(r.extintorVence),
       est(r.fatigaAlerta ? "crit" : "ok", r.fatigaAlerta ? "Riesgo" : "OK"), malos.length ? est("crit", `${malos.length} problema${malos.length > 1 ? "s" : ""}`) : est("ok", "Todo bueno"),
       malos.map(([k, s]) => `${ITEM_NAME[k]} (${ESTADO_TXT[s]})`).join(" · "), r.obs || ""];
   }));
@@ -1346,7 +1362,7 @@ document.addEventListener("input", async ev => {
 });
 document.addEventListener("change", ev => {
   if (ev.target.id === "flt-faena") { S.filtro.faena = ev.target.value; render(); }
-  if (ev.target.id === "f-patente") { syncDraft(); render(); }
+  if (ev.target.id === "f-patente" || ["f-rt","f-pc","f-ext"].includes(ev.target.id)) { syncDraft(); render(); }
 });
 function actualizarProgreso() {
   const d = S.draft, p = $(".progress"); if (!d || !p) return;
@@ -1357,7 +1373,7 @@ function syncDraft() {
   if (!S.draft || !$("#checkForm")) return;
   S.draft.patente = $("#f-patente").value; S.draft.km = $("#f-km").value; S.draft.conductor = $("#f-conductor").value;
   S.draft.sap = $("#f-sap").value; S.draft.kmMant = $("#f-kmmant").value; S.draft.combustible = $("#f-comb").value;
-  S.draft.extintorVence = $("#f-ext").value; S.draft.obs = $("#f-obs").value;
+  S.draft.extintorVence = $("#f-ext").value; S.draft.revTecVence = $("#f-rt").value; S.draft.permisoVence = $("#f-pc").value; S.draft.obs = $("#f-obs").value;
 }
 
 // ---------- Arranque ----------
