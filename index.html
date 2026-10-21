@@ -288,7 +288,7 @@ const DOMINIO = "flota-msmin.app";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "msmin.auth" } });
 const normUser = u => String(u || "").trim().toLowerCase().replace(/[.\s-]/g, "");
 const vehDeDb = r => ({ patente: r.patente, interno: r.interno || "", marca: r.marca || "", modelo: r.modelo || "", anio: r.anio, faena: r.faena || "",
-  kmActual: r.km_actual, kmUltimaMant: r.km_ultima_mant, intervaloKm: r.intervalo_km || 10000, venceRevTec: r.vence_rev_tec, venceExtintor: r.vence_extintor, vencePermiso: r.vence_permiso, revisar: !!r.revisar });
+  kmActual: r.km_actual, kmUltimaMant: r.km_ultima_mant, intervaloKm: r.intervalo_km || 10000, venceRevTec: r.vence_rev_tec, venceExtintor: r.vence_extintor, vencePermiso: r.vence_permiso, kmProxMant: r.km_prox_mant, revisar: !!r.revisar });
 const vehADb = v => ({ patente: normPat(v.patente), interno: v.interno || "", marca: v.marca || "", modelo: v.modelo || "", anio: v.anio || null, faena: v.faena || "",
   km_actual: v.kmActual ?? null, km_ultima_mant: v.kmUltimaMant ?? null, intervalo_km: v.intervaloKm || 10000, revisar: false, vence_rev_tec: v.venceRevTec || null, vence_permiso: v.vencePermiso || null,
   vence_extintor: v.venceExtintor || null, actualizado: new Date().toISOString() });
@@ -454,7 +454,7 @@ function estadoVehiculo(v, regsPorPat) {
   const intervalo = +v.intervaloKm || 10000;
   // Próxima mantención: datos del vehículo; si no hay, el "KM Mant." que anotó el conductor.
   const proxV = (v.kmUltimaMant == null || v.kmUltimaMant === "") ? null : +v.kmUltimaMant + intervalo;
-  const proxC = ult && +ult.kmMant > 0 ? +ult.kmMant : null;
+  const proxC = ult && +ult.kmMant > 0 ? +ult.kmMant : +v.kmProxMant > 0 ? +v.kmProxMant : null;
   const proxKm = proxV ?? proxC;
   if (proxKm == null) {
     res.mant = { cls: "none", txt: "Sin dato", n: 0, rest: null, pct: 0 };
@@ -551,6 +551,9 @@ function renderCheck() {
   if (v && d._precarga !== v.patente) {
     d._precarga = v.patente;
     d.revTecVence = v.venceRevTec || ""; d.permisoVence = v.vencePermiso || ""; d.extintorVence = v.venceExtintor || "";
+    // Próxima mantención: la registrada por el administrador; si no hay, la última que anotó un conductor
+    const prox = v.kmUltimaMant != null && v.kmUltimaMant !== "" ? +v.kmUltimaMant + (+v.intervaloKm || 10000) : +v.kmProxMant || "";
+    d.kmMant = prox ? String(prox) : "";
   }
   const opts = tipo => tipo === "req" ? [["ok","Bueno"],["malo","Malo"],["falta","Falta"]] : [["ok","Bueno"],["malo","Malo"],["na","N/A"]];
   return `<section class="view">

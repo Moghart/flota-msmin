@@ -68,3 +68,7 @@ begin
    where patente = new.patente;
   return new;
 end $function$;
+
+-- 7) Km de próxima mantención anotado por el conductor (para precargarlo en el siguiente check)
+alter table public.vehiculos add column if not exists km_prox_mant integer;
+-- check_actualiza_km() además hace: km_prox_mant = coalesce(nullif(new.km_mant, 0), km_prox_mant)
