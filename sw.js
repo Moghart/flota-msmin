@@ -1,7 +1,7 @@
 // Service worker de Flota MSMIN: permite abrir la app y hacer el check sin internet.
 // La página se pide primero a la red (para recibir actualizaciones) y si no hay conexión se usa la copia guardada.
 // Las librerías y fuentes se guardan la primera vez y luego se sirven desde el teléfono.
-const VERSION = "flota-v3";
+const VERSION = "flota-v4";
 const PROPIOS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 const LIBRERIAS = [
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js",

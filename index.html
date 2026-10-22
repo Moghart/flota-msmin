@@ -599,10 +599,10 @@ function renderCheck() {
           <input id="f-conductor" type="text" autocomplete="name" placeholder="Nombre y apellido" value="${esc(d.conductor)}" required></label>
         <label class="f">SAP
           <input id="f-sap" type="text" inputmode="numeric" placeholder="N° SAP" value="${esc(d.sap)}"></label>
-        ${vehs.length ? `<label class="f">N° interno / Patente
+        ${vehs.length ? `<label class="f">Patente / N° interno
           <select id="f-patente" required>
             <option value="">Selecciona la camioneta</option>
-            ${vehs.map(x => `<option value="${esc(x.patente)}" ${!d.nueva && x.patente === d.patente ? "selected" : ""}>${x.interno ? esc(x.interno) + " · " : ""}${esc(showPat(x.patente))}${x.marca || x.modelo ? " · " + esc([x.marca, x.modelo].filter(Boolean).join(" ")) : ""}</option>`).join("")}
+            ${vehs.map(x => `<option value="${esc(x.patente)}" ${!d.nueva && x.patente === d.patente ? "selected" : ""}>${esc(showPat(x.patente))}${x.interno ? " · " + esc(x.interno) : ""}</option>`).join("")}
             <option value="__nueva" ${d.nueva ? "selected" : ""}>＋ Otra patente (no está en la lista)</option>
           </select></label>` : ""}
         ${d.nueva || !vehs.length ? `<label class="f">Patente
