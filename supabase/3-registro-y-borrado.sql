@@ -72,3 +72,7 @@ end $function$;
 -- 7) Km de próxima mantención anotado por el conductor (para precargarlo en el siguiente check)
 alter table public.vehiculos add column if not exists km_prox_mant integer;
 -- check_actualiza_km() además hace: km_prox_mant = coalesce(nullif(new.km_mant, 0), km_prox_mant)
+
+-- 8) Marca separada del modelo en camionetas nuevas creadas desde el check
+alter table public.checks add column if not exists marca text not null default '';
+-- check_actualiza_km() inserta marca = new.marca y modelo = new.vehiculo

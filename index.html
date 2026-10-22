@@ -389,7 +389,7 @@ const SERVER = {
   },
   async guardarCheck(reg, firma) {
     const fila = { id: reg.id, fecha: reg.fecha, patente: reg.patente, conductor: reg.conductor, sap: reg.sap || "", km: reg.km, km_mant: reg.kmMant, combustible: reg.combustible,
-      items: reg.items, fatiga: reg.fatiga, fatiga_alerta: !!reg.fatigaAlerta, extintor_vence: reg.extintorVence || null, rev_tec_vence: reg.revTecVence || null, permiso_vence: reg.permisoVence || null, interno: reg.interno || "", vehiculo: reg.vehiculo || "", obs: reg.obs || "", firma };
+      items: reg.items, fatiga: reg.fatiga, fatiga_alerta: !!reg.fatigaAlerta, extintor_vence: reg.extintorVence || null, rev_tec_vence: reg.revTecVence || null, permiso_vence: reg.permisoVence || null, interno: reg.interno || "", marca: reg.marca || "", vehiculo: reg.vehiculo || "", obs: reg.obs || "", firma };
     const { data, error } = await sb.from("checks").insert(fila).select(CHECK_COLS).single();
     if (error && error.code === "23505") return { ...reg, firma: true }; // ya se había subido en un intento anterior
     if (error) fallo(error);
@@ -560,7 +560,7 @@ function render() {
 // ---------- Vista conductor: Check list ----------
 function nuevoDraft() {
   return { patente: lsGet("msmin.patente") || "", km: "", kmMant: "", combustible: "", conductor: lsGet("msmin.conductor") || (S.user && S.user.nombre) || "",
-    sap: lsGet("msmin.sap") || (S.user && S.user.sap) || "", items: {}, fatiga: {}, extintorVence: "", revTecVence: "", permisoVence: "", obs: "", firma: null, nueva: false, patTxt: "", interno: "", vehiculo: "" };
+    sap: lsGet("msmin.sap") || (S.user && S.user.sap) || "", items: {}, fatiga: {}, extintorVence: "", revTecVence: "", permisoVence: "", obs: "", firma: null, nueva: false, patTxt: "", interno: "", marca: "", vehiculo: "" };
 }
 const alertaFatiga = f => FATIGA.some(([id, , seguro]) => f && f[id] && f[id] !== seguro);
 function renderCheck() {
@@ -609,8 +609,10 @@ function renderCheck() {
           <input id="f-pattxt" type="text" autocapitalize="characters" placeholder="Ej: ABCD12" value="${esc(d.patTxt)}" class="${d._try && normPat(d.patTxt).length < 5 ? "need" : ""}" required></label>
         <label class="f">N° interno
           <input id="f-interno" type="text" placeholder="Ej: C-15" value="${esc(d.interno)}"></label>
-        <label class="f">Marca y modelo
-          <input id="f-vehiculo" type="text" placeholder="Ej: Toyota Hilux" value="${esc(d.vehiculo)}"></label>` : ""}
+        <label class="f">Marca
+          <input id="f-marca" type="text" placeholder="Ej: Toyota" value="${esc(d.marca)}"></label>
+        <label class="f">Modelo
+          <input id="f-vehiculo" type="text" placeholder="Ej: Hilux 4x4" value="${esc(d.vehiculo)}"></label>` : ""}
         <label class="f">KM actual
           <input id="f-km" type="number" inputmode="numeric" min="0" step="1" placeholder="${v && v.kmActual ? "Último: " + nf(v.kmActual) : "Ej: 62451"}" value="${esc(d.km)}" required></label>
         <label class="f">KM mantención (próxima)
@@ -703,7 +705,7 @@ async function enviarCheck() {
   if (!errs.length && v && v.kmActual && +d.km < +v.kmActual) errs.push(`el KM actual es menor al último registrado (${nf(v.kmActual)} km); corrígelo`);
   if (errs.length) { d._try = true; render(); $("#formErr").innerHTML = `<div class="notice err">Para enviar: ${esc(errs.join(", "))}.</div>`; return; }
   const id = nuevoId();
-  const reg = { id, patente: pat, interno: v ? v.interno || "" : d.interno.trim(), vehiculo: v ? "" : d.vehiculo.trim(), km: Math.round(+d.km), kmMant: d.kmMant ? Math.round(+d.kmMant) : null, combustible: Math.round(+d.combustible),
+  const reg = { id, patente: pat, interno: v ? v.interno || "" : d.interno.trim(), marca: v ? "" : d.marca.trim(), vehiculo: v ? "" : d.vehiculo.trim(), km: Math.round(+d.km), kmMant: d.kmMant ? Math.round(+d.kmMant) : null, combustible: Math.round(+d.combustible),
     conductor: d.conductor, sap: d.sap, fecha: new Date().toISOString(), items: { ...d.items }, fatiga: { ...d.fatiga },
     fatigaAlerta: alertaFatiga(d.fatiga), extintorVence: d.extintorVence || null, revTecVence: d.revTecVence || null, permisoVence: d.permisoVence || null, obs: d.obs || "", firma: true };
   const btn = $("#checkForm button[type=submit]"); btn.disabled = true; btn.textContent = "Enviando…";
@@ -1459,7 +1461,7 @@ function syncDraft() {
   if (!S.draft || !$("#checkForm")) return;
   const fp = $("#f-patente");
   if (fp) { S.draft.nueva = fp.value === "__nueva"; S.draft.patente = S.draft.nueva ? "" : fp.value; } else S.draft.nueva = true;
-  if ($("#f-pattxt")) { S.draft.patTxt = $("#f-pattxt").value; S.draft.interno = $("#f-interno").value; S.draft.vehiculo = $("#f-vehiculo").value; } S.draft.km = $("#f-km").value; S.draft.conductor = $("#f-conductor").value;
+  if ($("#f-pattxt")) { S.draft.patTxt = $("#f-pattxt").value; S.draft.interno = $("#f-interno").value; S.draft.marca = $("#f-marca").value; S.draft.vehiculo = $("#f-vehiculo").value; } S.draft.km = $("#f-km").value; S.draft.conductor = $("#f-conductor").value;
   S.draft.sap = $("#f-sap").value; S.draft.kmMant = $("#f-kmmant").value; S.draft.combustible = $("#f-comb").value;
   S.draft.extintorVence = $("#f-ext").value; S.draft.revTecVence = $("#f-rt").value; S.draft.permisoVence = $("#f-pc").value; S.draft.obs = $("#f-obs").value;
 }
