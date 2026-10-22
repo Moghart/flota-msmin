@@ -365,6 +365,13 @@ const SERVER = {
     const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: URL_APP });
     if (error) throw new Error(errAuth(error.message)); return true;
   },
+  // Enlaces de correo con token_hash: solo se usan cuando la persona presiona el botón en la app
+  // (los filtros de correo corporativos abren los enlaces y gastarían un enlace de un solo uso)
+  async verificarEnlace(tokenHash, tipo) {
+    const { error } = await sb.auth.verifyOtp({ token_hash: tokenHash, type: tipo });
+    if (error) throw new Error(/expired|invalid|not found/i.test(error.message) ? "ENLACE_USADO" : errAuth(error.message));
+    return true;
+  },
   async nuevaClave(clave) {
     const { error } = await sb.auth.updateUser({ password: clave });
     if (error) throw new Error(/different|same/i.test(error.message) ? "La nueva clave debe ser distinta a la anterior." : errAuth(error.message));
@@ -424,7 +431,7 @@ const SERVER = {
   }
 };
 function llamar(fn, ...args) {
-  if (!["login","registrar","recuperar","nuevaClave"].includes(fn)) args = args.slice(1); // el primer argumento era el token de Apps Script
+  if (!["login","registrar","recuperar","nuevaClave","verificarEnlace"].includes(fn)) args = args.slice(1); // el primer argumento era el token de Apps Script
   return SERVER[fn](...args).catch(e => {
     const msg = (e && e.message) || String(e);
     if (esErrRed(e)) throw new Error(msg); // sin señal no se cierra la sesión
@@ -1244,6 +1251,13 @@ function renderLogin() {
     <button class="btn primary" type="submit">Enviar enlace</button>
     <p class="small muted" style="margin:0">${link("login", "Volver a ingresar")}</p>
   </form></section>`;
+  if (m === "activar") return `<section class="login"><form id="loginForm" class="panel" novalidate>
+    <h2>Activa tu cuenta</h2>
+    <p class="small muted" style="margin:0">Presiona el botón para confirmar tu correo y entrar a la app.</p>
+    ${aviso}
+    <div id="loginErr"></div>
+    <button class="btn primary" type="submit">Activar mi cuenta</button>
+  </form></section>`;
   if (m === "nueva") return `<section class="login"><form id="loginForm" class="panel" novalidate>
     <h2>Crea tu nueva clave</h2>
     ${aviso}
@@ -1284,11 +1298,31 @@ async function ingresar() {
     if (!correoOk(email)) return fallo("Escribe el correo de tu cuenta.");
     tarea = async () => { await llamar("recuperar", email); S.authModo = "login";
       S.authAviso = { txt: `Si ${email} tiene cuenta, te llegará un correo con un enlace para crear tu nueva clave. Revisa también la carpeta de spam.` }; render(); };
+  } else if (m === "activar") {
+    tarea = async () => {
+      try { await llamar("verificarEnlace", S.enlace.token_hash, S.enlace.type); }
+      catch (e) {
+        if (e.message !== "ENLACE_USADO") throw e;
+        S.enlace = null; S.authModo = "login";
+        S.authAviso = { txt: "Este enlace ya fue usado o expiró. Si ya activaste tu cuenta, ingresa con tu correo y clave." }; render(); return;
+      }
+      S.enlace = null; await entrar(await SERVER.entrar()); toast("Cuenta activada. ¡Bienvenido!");
+    };
   } else if (m === "nueva") {
     const n = $("#n-pass").value;
     if (n.length < 6) return fallo("La clave debe tener al menos 6 caracteres.");
     if (n !== $("#n-pass2").value) return fallo("Las claves no coinciden.");
-    tarea = async () => { await entrar(await llamar("nuevaClave", n)); toast("Clave actualizada"); };
+    tarea = async () => {
+      if (S.enlace && S.enlace.type === "recovery") {
+        try { await llamar("verificarEnlace", S.enlace.token_hash, "recovery"); }
+        catch (e) {
+          if (e.message !== "ENLACE_USADO") throw e;
+          S.enlace = null; S.authModo = "olvido"; S.authAviso = { err: true, txt: "El enlace expiró o ya fue usado. Pide uno nuevo aquí." }; render(); return;
+        }
+        S.enlace = null;
+      }
+      await entrar(await llamar("nuevaClave", n)); toast("Clave actualizada");
+    };
   } else {
     const u = $("#l-user").value.trim(), p = $("#l-pass").value;
     if (!u || !p) return fallo("Escribe tu correo y tu clave.");
@@ -1502,17 +1536,25 @@ function start() {
   // Enlaces que llegan por correo (recuperar clave o confirmar cuenta)
   const h = new URLSearchParams(location.hash.slice(1));
   const vieneDeEnlace = h.has("access_token");
+  const q = new URLSearchParams(location.search);
+  if (q.get("token_hash")) {
+    S.enlace = { token_hash: q.get("token_hash"), type: q.get("type") === "recovery" ? "recovery" : "email" };
+    S.authModo = S.enlace.type === "recovery" ? "nueva" : "activar";
+    history.replaceState(null, "", URL_APP);
+  }
   if (h.get("type") === "recovery") S.authModo = "nueva";
   if (h.has("error_code") || h.has("error")) {
-    S.authModo = "olvido";
-    S.authAviso = { err: true, txt: /expired|invalid/i.test(h.get("error_code") + h.get("error_description")) ? "El enlace expiró o ya fue usado. Pide uno nuevo aquí." : (h.get("error_description") || "El enlace no es válido.") };
+    S.authModo = "login";
+    S.authAviso = { err: true, txt: /expired|invalid/i.test(h.get("error_code") + h.get("error_description"))
+      ? "Este enlace ya fue usado o expiró. Si estabas activando tu cuenta, probablemente ya está activa: ingresa con tu correo y clave. Si querías recuperar tu clave, pide un enlace nuevo en ¿Olvidaste tu clave?"
+      : (h.get("error_description") || "El enlace no es válido.") };
     history.replaceState(null, "", URL_APP);
   }
   sb.auth.onAuthStateChange(ev => {
     if (ev === "PASSWORD_RECOVERY") { S.authModo = "nueva"; S.token = null; render(); }
     else if (ev === "SIGNED_IN" && vieneDeEnlace && !S.token && S.authModo !== "nueva") { S.token = "sb"; S.flotaReady = false; render(); cargar(); }
   });
-  S.token = lsGet("msmin.auth") && S.authModo !== "nueva" ? "sb" : null;
+  S.token = lsGet("msmin.auth") && !["nueva","activar"].includes(S.authModo) ? "sb" : null;
   if (S.token) { S.flotaReady = false; render(); cargar(); } else render();
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); S.instalar = e; renderAvisos(); });

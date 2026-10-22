@@ -16,10 +16,10 @@
     <p style="margin:0 0 12px;font-size:15px;line-height:1.55">Hola, ¡bienvenido!</p>
     <p style="margin:0 0 22px;font-size:15px;line-height:1.55">Ya casi está lista tu cuenta en la app Flota MSMIN. Presiona el botón para confirmar tu correo y empezar a hacer el check list diario.</p>
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 22px"><tr>
-      <td style="border-radius:8px;background:#1f3f95"><a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:13px 26px;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:8px">Confirmar mi correo</a></td>
+      <td style="border-radius:8px;background:#1f3f95"><a href="{{ .SiteURL }}/?token_hash={{ .TokenHash }}&amp;type=email" style="display:inline-block;padding:13px 26px;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:8px">Confirmar mi correo</a></td>
     </tr></table>
     <p style="margin:0 0 6px;font-size:13px;line-height:1.5;color:#6b7280">Si no creaste una cuenta, ignora este correo.</p>
-    <p style="margin:0 0 20px;font-size:12px;line-height:1.5;color:#6b7280">Si el botón no funciona, copia este enlace en tu navegador:<br><a href="{{ .ConfirmationURL }}" style="color:#1f3f95;word-break:break-all">{{ .ConfirmationURL }}</a></p>
+    <p style="margin:0 0 20px;font-size:12px;line-height:1.5;color:#6b7280">Si el botón no funciona, copia este enlace en tu navegador:<br><a href="{{ .SiteURL }}/?token_hash={{ .TokenHash }}&amp;type=email" style="color:#1f3f95;word-break:break-all">{{ .SiteURL }}/?token_hash={{ .TokenHash }}&amp;type=email</a></p>
   </td></tr>
   <tr><td style="padding:16px 28px;background:#f7f8fb;border-top:1px solid #e2e6ee">
     <p style="margin:0 0 4px;font-size:12px;line-height:1.5;color:#6b7280"><strong style="color:#e8571e">Este es un correo automático, por favor no lo respondas.</strong> Los mensajes enviados a esta dirección no son revisados.</p>
