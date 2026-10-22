@@ -198,6 +198,10 @@ tbody tr:hover td{background:var(--surface-2)}
 .login{display:grid;place-items:center;padding-block:40px}
 #avisos{display:flex;flex-direction:column;gap:8px;padding-top:12px}#avisos:empty{display:none}
 .aviso{font-size:.9rem}.aviso-inst{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pw{position:relative;display:block}.pw input{width:100%;padding-right:44px}
+.pw-eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:grid;place-items:center;background:none;border:0;border-radius:6px;color:var(--muted,#6b7280);cursor:pointer}
+.pw-eye[aria-pressed="true"]{color:var(--accent)}
+.pw-msg{font-size:.85rem;margin-top:-6px}.pw-msg:empty{display:none}.pw-msg.mal{color:var(--crit)}.pw-msg.bien{color:var(--ok)}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .rc.rc-pdf{grid-template-columns:auto 1fr auto auto}
 .login form{width:min(400px,100%);display:flex;flex-direction:column;gap:14px;padding:24px}
@@ -1225,8 +1229,8 @@ function renderLogin() {
     <label class="f">RUT<input id="r-rut" autocapitalize="characters" placeholder="Ej: 12345678-9"></label>
     <label class="f">SAP<input id="r-sap" inputmode="numeric" placeholder="Opcional"></label>
     <label class="f">Correo<input id="r-email" type="email" autocomplete="email" autocapitalize="none" placeholder="nombre@correo.cl"></label>
-    <label class="f">Clave<input id="r-pass" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></label>
-    <label class="f">Repite la clave<input id="r-pass2" type="password" autocomplete="new-password"></label>
+    <label class="f">Clave<span class="pw"><input id="r-pass" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"><button type="button" class="pw-eye" data-act="ver-clave" aria-label="Mostrar clave" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
+    <label class="f">Repite la clave<span class="pw"><input id="r-pass2" type="password" autocomplete="new-password"><button type="button" class="pw-eye" data-act="ver-clave" aria-label="Mostrar clave" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label><div class="pw-msg" data-par="r-pass" data-rep="r-pass2" aria-live="polite"></div>
     <div id="loginErr"></div>
     <button class="btn primary" type="submit">Crear cuenta</button>
     <p class="small muted" style="margin:0">¿Ya tienes cuenta? ${link("login", "Ingresar")}</p>
@@ -1243,8 +1247,8 @@ function renderLogin() {
   if (m === "nueva") return `<section class="login"><form id="loginForm" class="panel" novalidate>
     <h2>Crea tu nueva clave</h2>
     ${aviso}
-    <label class="f">Nueva clave<input id="n-pass" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></label>
-    <label class="f">Repite la nueva clave<input id="n-pass2" type="password" autocomplete="new-password"></label>
+    <label class="f">Nueva clave<span class="pw"><input id="n-pass" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"><button type="button" class="pw-eye" data-act="ver-clave" aria-label="Mostrar clave" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
+    <label class="f">Repite la nueva clave<span class="pw"><input id="n-pass2" type="password" autocomplete="new-password"><button type="button" class="pw-eye" data-act="ver-clave" aria-label="Mostrar clave" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label><div class="pw-msg" data-par="n-pass" data-rep="n-pass2" aria-live="polite"></div>
     <div id="loginErr"></div>
     <button class="btn primary" type="submit">Guardar y entrar</button>
   </form></section>`;
@@ -1253,7 +1257,7 @@ function renderLogin() {
     <p class="small muted" style="margin:0">Check list diario de camionetas MSMIN.</p>
     ${aviso}
     <label class="f">Correo<input id="l-user" autocomplete="username" autocapitalize="none" placeholder="nombre@correo.cl"></label>
-    <label class="f">Clave<input id="l-pass" type="password" autocomplete="current-password"></label>
+    <label class="f">Clave<span class="pw"><input id="l-pass" type="password" autocomplete="current-password"><button type="button" class="pw-eye" data-act="ver-clave" aria-label="Mostrar clave" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
     <div id="loginErr"></div>
     <button class="btn primary" type="submit">Ingresar</button>
     <p class="small muted" style="margin:0;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">${link("olvido", "¿Olvidaste tu clave?")}${link("registro", "Crear cuenta")}</p>
@@ -1303,9 +1307,9 @@ function renderClave() {
   return `<section class="view"><form id="claveForm" class="panel" style="max-width:460px" novalidate>
     <div class="panel-h"><h2>Cambiar mi clave</h2></div>
     <div class="grid-form" style="grid-template-columns:1fr">
-      <label class="f">Clave actual<input id="c-actual" type="password" autocomplete="current-password"></label>
-      <label class="f">Nueva clave<input id="c-nueva" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></label>
-      <label class="f">Repite la nueva clave<input id="c-nueva2" type="password" autocomplete="new-password"></label>
+      <label class="f">Clave actual<span class="pw"><input id="c-actual" type="password" autocomplete="current-password"><button type="button" class="pw-eye" data-act="ver-clave" aria-label="Mostrar clave" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
+      <label class="f">Nueva clave<span class="pw"><input id="c-nueva" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"><button type="button" class="pw-eye" data-act="ver-clave" aria-label="Mostrar clave" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
+      <label class="f">Repite la nueva clave<span class="pw"><input id="c-nueva2" type="password" autocomplete="new-password"><button type="button" class="pw-eye" data-act="ver-clave" aria-label="Mostrar clave" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label><div class="pw-msg" data-par="c-nueva" data-rep="c-nueva2" aria-live="polite"></div>
     </div>
     <div id="claveErr" style="margin-top:12px"></div>
     <div class="form-foot"><button type="button" class="btn ghost" data-act="volver">Volver</button><button class="btn primary" type="submit">Guardar clave</button></div>
@@ -1412,6 +1416,7 @@ document.addEventListener("click", async ev => {
   else if (a === "cerrar") { S.drawer = null; renderOverlay(); }
   else if (a === "refrescar") { await cargar(); toast("Datos actualizados"); }
   else if (a === "salir") cerrarSesion();
+  else if (a === "ver-clave") { const i = t.parentElement.querySelector("input"); const ver = i.type === "password"; i.type = ver ? "text" : "password"; t.setAttribute("aria-pressed", ver); t.setAttribute("aria-label", ver ? "Ocultar clave" : "Mostrar clave"); }
   else if (a === "csv") exportarExcel();
   else if (a === "sync") sincronizar();
   else if (a === "instalar") { const p = S.instalar; S.instalar = null; renderAvisos(); if (p) { p.prompt(); try { await p.userChoice; } catch {} } }
@@ -1442,8 +1447,20 @@ document.addEventListener("submit", ev => {
   if (ev.target.id === "claveForm") guardarClave();
   if (ev.target.id === "userForm") guardarUser();
 });
+// Aviso en vivo cuando la clave repetida no coincide; el botón no deja continuar hasta que coincidan
+function revisarClaves() {
+  document.querySelectorAll(".pw-msg").forEach(m => {
+    const a = document.getElementById(m.dataset.par), b = document.getElementById(m.dataset.rep); if (!a || !b) return;
+    const btn = m.closest("form") && m.closest("form").querySelector("button[type=submit]");
+    const mal = b.value !== "" && a.value !== b.value;
+    m.className = "pw-msg" + (mal ? " mal" : b.value && a.value === b.value ? " bien" : "");
+    m.textContent = mal ? "Las claves no coinciden." : b.value && a.value === b.value ? (a.value.length < 6 ? "Coinciden, pero deben tener al menos 6 caracteres." : "Las claves coinciden.") : "";
+    if (btn) btn.disabled = mal;
+  });
+}
 document.addEventListener("input", async ev => {
   const id = ev.target.id;
+  if (ev.target.closest(".pw")) revisarClaves();
   if (id === "flt-q") { S.filtro.q = ev.target.value; clearTimeout(S._qt); S._qt = setTimeout(() => { render(); const i = $("#flt-q"); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250); }
 });
 document.addEventListener("change", ev => {
