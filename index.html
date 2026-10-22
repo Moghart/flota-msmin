@@ -1277,7 +1277,7 @@ async function ingresar() {
     if (r.clave.length < 6) return fallo("La clave debe tener al menos 6 caracteres.");
     if (r.clave !== $("#r-pass2").value) return fallo("Las claves no coinciden.");
     tarea = async () => { const x = await llamar("registrar", r);
-      if (x.confirmar) { S.authModo = "login"; S.authAviso = { txt: `Te enviamos un correo a ${r.email}. Ábrelo para activar tu cuenta y luego ingresa.` }; render(); return; }
+      if (x.confirmar) { S.authModo = "login"; S.authAviso = { txt: `Te enviamos un correo a ${r.email}. Ábrelo y presiona "Confirmar mi correo" para activar tu cuenta; luego ingresa aquí. Si no lo ves en unos minutos, revisa la carpeta de spam o correo no deseado.` }; render(); return; }
       lsSet("msmin.conductor", r.nombre); if (r.sap) lsSet("msmin.sap", r.sap); await entrar(x); toast("Cuenta creada. ¡Bienvenido!"); };
   } else if (m === "olvido") {
     const email = $("#o-email").value.trim().toLowerCase();
