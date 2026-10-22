@@ -1,7 +1,7 @@
 // Service worker de Flota MSMIN: permite abrir la app y hacer el check sin internet.
 // La página se pide primero a la red (para recibir actualizaciones) y si no hay conexión se usa la copia guardada.
 // Las librerías y fuentes se guardan la primera vez y luego se sirven desde el teléfono.
-const VERSION = "flota-v4";
+const VERSION = "flota-v5";
 const PROPIOS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 const LIBRERIAS = [
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js",
@@ -28,7 +28,8 @@ self.addEventListener("fetch", ev => {
   if (url.hostname.endsWith("supabase.co")) return; // datos: siempre en vivo, la app maneja el modo sin conexión
 
   if (req.mode === "navigate" || (url.origin === location.origin && url.pathname.endsWith(".html"))) {
-    ev.respondWith(fetch(req).then(r => {
+    // no-cache: siempre se pregunta al servidor si hay versión nueva antes de usar la copia del navegador
+    ev.respondWith(fetch(req.url, { cache: "no-cache", credentials: "same-origin" }).then(r => {
       const copia = r.clone(); caches.open(VERSION).then(c => c.put("./index.html", copia)); return r;
     }).catch(() => caches.match("./index.html")));
     return;
